@@ -1,0 +1,341 @@
+import * as React from 'react';
+import { useState, useEffect } from 'react';
+import { Individual, Marriage } from '@/types';
+import { MOCK_INDIVIDUALS, MOCK_MARRIAGES } from '@/lib/mockData';
+import FamilyTree from '@/components/Tree/FamilyTree';
+import IndividualDetail from '@/components/Sidebar/IndividualDetail';
+import LoginPage from '@/components/Auth/LoginPage';
+import AdminPanel from '@/components/Admin/AdminPanel';
+import { supabase } from '@/lib/supabase';
+import { 
+  Search, 
+  Filter, 
+  Share2, 
+  Settings, 
+  Users, 
+  LogIn, 
+  LogOut, 
+  ShieldCheck, 
+  UserPlus, 
+  RefreshCcw, 
+  Calendar 
+} from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: any;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+  }
+
+  static getDerivedStateFromError(error: any): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: React.ErrorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 bg-rose-50 text-rose-800 font-sans">
+          <h1 className="text-2xl font-bold mb-4">Aplikasi Mengalami Kendala</h1>
+          <pre className="p-4 bg-white border border-rose-200 rounded text-xs overflow-auto">
+            {this.state.error?.toString()}
+          </pre>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-rose-600 text-white rounded font-bold"
+          >
+            Muat Ulang Halaman
+          </button>
+        </div>
+      );
+    }
+
+    return (this as any).props.children;
+  }
+}
+
+export default function App() {
+  const [individuals, setIndividuals] = useState<Individual[]>(MOCK_INDIVIDUALS);
+  const [marriages, setMarriages] = useState<Marriage[]>(MOCK_MARRIAGES);
+  const [selectedIndividual, setSelectedIndividual] = useState<Individual | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [adminTargetIndividual, setAdminTargetIndividual] = useState<Individual | null>(null);
+  const [user, setUser] = useState<any>(null);
+
+  const fetchData = async () => {
+    try {
+      // Fetch Individuals
+      const { data: indData, error: indError } = await supabase
+        .from('individuals')
+        .select('*')
+        .order('created_at', { ascending: true });
+      
+      if (indError) throw indError;
+      if (indData) {
+        setIndividuals(indData);
+      }
+
+      // Fetch Marriages
+      const { data: mrgData, error: mrgError } = await supabase
+        .from('marriages')
+        .select('*');
+      
+      if (mrgError) {
+        console.warn('Marriage table might not exist yet:', mrgError);
+      } else if (mrgData) {
+        setMarriages(mrgData);
+      }
+    } catch (err) {
+      console.error('Error fetching data, using mock data:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+
+    // Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session) setIsLoginOpen(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const handleEditIndividual = (individual: Individual) => {
+    setAdminTargetIndividual(individual);
+    setIsAdminPanelOpen(true);
+  };
+
+  const handleAddNew = () => {
+    setAdminTargetIndividual(null);
+    setIsAdminPanelOpen(true);
+  };
+
+  return (
+    <ErrorBoundary>
+      <div className="flex flex-col h-screen bg-bg overflow-hidden text-ink">
+        {/* Header */}
+      <header className="h-16 bg-surface border-b border-border-olive flex items-center justify-between px-6 z-10">
+        <div className="flex items-center gap-3">
+          <div className="bg-primary-olive w-8 h-8 rounded-lg flex items-center justify-center text-white font-serif font-bold">
+            Q
+          </div>
+          <h1 className="text-xl font-serif font-bold italic text-primary-olive">Family Tree Qomaruddin</h1>
+          {user && (
+            <div className="ml-4 flex items-center gap-1.5 px-3 py-1 bg-primary-olive/10 text-primary-olive rounded-full text-[10px] font-bold uppercase tracking-widest border border-primary-olive/20">
+              <ShieldCheck size={12} /> Mode Admin
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-6">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Cari nama anggota keluarga..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-4 pr-10 py-2 bg-bg border border-border-olive rounded-full text-[13px] transition-all w-[300px] focus:outline-none focus:ring-1 focus:ring-primary-olive"
+            />
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] font-bold text-primary-olive">9 Generations</span>
+            <div className="h-8 w-px bg-border-olive/50 mx-1" />
+            
+            {user ? (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleAddNew}
+                  className="flex items-center gap-2 px-4 py-2 bg-accent-tan text-primary-olive rounded-full text-xs font-bold transition-all hover:bg-accent-tan/80"
+                >
+                  <UserPlus size={16} /> Tambah Data
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-4 py-2 hover:bg-rose-50 text-rose-600 rounded-full text-xs font-bold transition-all"
+                >
+                  <LogOut size={16} /> Keluar
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => setIsLoginOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-olive text-white rounded-full text-xs font-bold shadow-lg shadow-primary-olive/20 hover:bg-primary-olive/90 transition-all"
+              >
+                <LogIn size={16} /> Admin Login
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar: Demographics */}
+        <aside className="w-[260px] bg-surface border-r border-border-olive p-5 flex flex-col gap-8 overflow-y-auto">
+          <div>
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3">Demografi Keturunan</h3>
+            <div className="bg-bg p-4 rounded-xl border border-border-olive">
+              <p className="text-3xl font-light text-primary-olive leading-none">{individuals.length}</p>
+              <p className="text-[12px] text-ink-light mt-1">Total Individu</p>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3">Sebaran Wilayah</h3>
+            <div className="space-y-2">
+              {[
+                { name: 'Gresik', count: Math.floor(individuals.length * 0.3) },
+                { name: 'Tuban', count: Math.floor(individuals.length * 0.2) },
+                { name: 'Lamongan', count: Math.floor(individuals.length * 0.1) },
+                { name: 'Surabaya', count: Math.floor(individuals.length * 0.08) },
+              ].map((loc) => (
+                <div key={loc.name} className="flex justify-between text-[12px] py-1.5 border-b border-border-olive/50 last:border-0">
+                  <span className="text-ink">{loc.name}</span>
+                  <span className="font-bold text-primary-olive">{loc.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3 italic">Kalender Kelahiran</h3>
+            <div className="bg-white border border-border-olive rounded-xl p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[14px] font-serif font-bold text-primary-olive">
+                  {new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(new Date())}
+                </span>
+                <Calendar size={14} className="text-accent-tan" />
+              </div>
+              <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1">
+                {individuals
+                  .filter(i => i.birth_date && new Date(i.birth_date).getMonth() === new Date().getMonth())
+                  .sort((a, b) => new Date(a.birth_date!).getDate() - new Date(b.birth_date!).getDate())
+                  .map(ind => (
+                    <div key={ind.id} className="flex items-center gap-3 group cursor-pointer" onClick={() => setSelectedIndividual(ind)}>
+                      <div className="w-8 h-8 rounded-full bg-accent-tan/10 border border-accent-tan/20 flex items-center justify-center text-[10px] font-bold text-primary-olive shrink-0">
+                        {new Date(ind.birth_date!).getDate()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-ink truncate group-hover:text-primary-olive transition-colors">{ind.name}</p>
+                        <p className="text-[9px] text-ink-light leading-none mt-0.5">HUT ke-{new Date().getFullYear() - new Date(ind.birth_date!).getFullYear()}</p>
+                      </div>
+                    </div>
+                  ))
+                }
+                {individuals.filter(i => i.birth_date && new Date(i.birth_date).getMonth() === new Date().getMonth()).length === 0 && (
+                  <p className="text-[10px] text-ink-light italic text-center py-4">Tidak ada kelahiran di bulan ini</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {user && (
+            <div className="mt-auto pt-6 border-t border-border-olive space-y-3">
+              <button 
+                onClick={handleAddNew}
+                className="w-full py-3 bg-primary-olive/5 border border-primary-olive/20 text-primary-olive rounded-xl text-xs font-bold hover:bg-primary-olive/10 transition-all flex items-center justify-center gap-2"
+              >
+                <UserPlus size={14} /> Tambah Anggota Baru
+              </button>
+              <button 
+                onClick={fetchData}
+                className="w-full py-3 bg-bg border border-border-olive text-ink-light rounded-xl text-xs font-bold hover:bg-surface transition-all flex items-center justify-center gap-2"
+              >
+                <RefreshCcw size={14} /> Refresh Data
+              </button>
+            </div>
+          )}
+        </aside>
+
+        {/* Tree Viewport */}
+        <div className="flex-1 relative">
+          <FamilyTree 
+            individuals={individuals} 
+            marriages={marriages}
+            onSelectIndividual={setSelectedIndividual}
+            searchQuery={searchQuery}
+          />
+
+          {/* Legend */}
+          <div className="absolute bottom-5 left-5 bg-surface/90 backdrop-blur-sm p-4 rounded-xl border border-border-olive shadow-lg flex flex-col gap-3 text-[11px]">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded-sm" />
+                <span className="font-bold text-blue-700">Laki-laki</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-rose-100 border border-rose-300 rounded-sm" />
+                <span className="font-bold text-rose-700">Perempuan</span>
+              </div>
+            </div>
+            <div className="h-px bg-border-olive/30 w-full" />
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 bg-verified-green rounded-full" />
+                <span className="text-ink-light">Terverifikasi</span>
+              </div>
+              <div className="font-mono text-primary-olive/60 font-bold bg-bg px-2 py-0.5 rounded">Gen: 1 — 9</div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Sidebar Detail */}
+      <IndividualDetail 
+        individual={selectedIndividual} 
+        individuals={individuals}
+        marriages={marriages}
+        onClose={() => setSelectedIndividual(null)}
+        isAdmin={!!user}
+        onEdit={handleEditIndividual}
+      />
+
+      {/* Modals */}
+      {isLoginOpen && (
+        <LoginPage onBack={() => setIsLoginOpen(false)} />
+      )}
+      
+      <AnimatePresence>
+        {isAdminPanelOpen && (
+          <AdminPanel 
+            onClose={() => setIsAdminPanelOpen(false)} 
+            selectedIndividual={adminTargetIndividual}
+            onRefresh={fetchData}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+    </ErrorBoundary>
+  );
+}
