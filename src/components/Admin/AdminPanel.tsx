@@ -54,12 +54,24 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   };
 
   const fetchEvents = async (id: string) => {
-    const { data } = await supabase
-      .from('events')
-      .select('*')
-      .eq('individual_id', id)
-      .order('date', { ascending: true });
-    if (data) setIndividualEvents(data);
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('individual_id', id)
+        .order('date', { ascending: true });
+        
+      if (error) {
+        if (error.code === 'PGRST116' || error.message.includes('cache')) {
+          console.warn('Events table missing or schema cache stale');
+          return;
+        }
+        throw error;
+      }
+      if (data) setIndividualEvents(data);
+    } catch (err: any) {
+      console.error('Error fetching events:', err);
+    }
   };
 
   const fetchMarriages = async (id: string) => {
@@ -85,15 +97,21 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     if (!editingId || !newEvent.description) return;
     setLoading(true);
     try {
-      const { error } = await supabase.from('events').insert([{
+      const eventData = {
         ...newEvent,
-        individual_id: editingId
-      }]);
+        individual_id: editingId,
+        date: newEvent.date === '' ? null : newEvent.date
+      };
+      const { error } = await supabase.from('events').insert([eventData]);
       if (error) throw error;
       setNewEvent({ description: '', date: '', location: '', type: 'other' });
       fetchEvents(editingId);
     } catch (err: any) {
-      setError(err.message);
+      if (err.message?.includes('public.events')) {
+        setError('Tabel "events" belum dibuat di Supabase. Silakan jalankan SQL di tab SQL Editor Supabase.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -107,7 +125,11 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       if (error) throw error;
       if (editingId) fetchEvents(editingId);
     } catch (err: any) {
-      setError(err.message);
+      if (err.message?.includes('public.events')) {
+        setError('Tabel "events" belum dibuat di Supabase.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Individual, Marriage, Event } from '@/types';
 import { getJavaneseDescendantTerm } from '@/lib/relationships';
+import { generateGenealogyIDs } from '@/lib/genealogy';
 import { supabase } from '@/lib/supabase';
 import { 
   Calendar, 
@@ -12,7 +13,10 @@ import {
   X,
   User,
   ShieldCheck,
-  Star
+  Star,
+  Fingerprint,
+  Link2,
+  GitBranch
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -62,6 +66,8 @@ export default function IndividualDetail({
 
   if (!individual) return null;
 
+  const { baseId, pathIds, displayId, shortestPath } = generateGenealogyIDs(individual, individuals, marriages);
+
   const father = individuals.find(i => i?.id === individual.father_id);
   const mother = individuals.find(i => i?.id === individual.mother_id);
   const spouseMarriages = marriages.filter(m => m?.husband_id === individual.id || m?.wife_id === individual.id);
@@ -105,13 +111,37 @@ export default function IndividualDetail({
               <User size={32} className="text-white" />
             </div>
             <h2 className="text-xl font-bold text-ink">{individual.name}</h2>
-            {individual.ref_code && (
-              <p className="text-[10px] font-mono font-bold text-primary-olive/70 mt-1">
-                Ref: {individual.ref_code}
-              </p>
-            )}
-            <div className="mt-2 inline-block bg-primary-olive text-white px-3 py-1 rounded-full text-[11px] font-medium">
-              {getJavaneseDescendantTerm(0)}
+            
+            <div className="mt-4 flex flex-col items-center gap-2">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-border-olive w-full shadow-sm">
+                <span className="text-[9px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1">
+                  <Fingerprint size={10} /> Display-ID
+                </span>
+                <span className="text-[14px] font-mono font-bold text-primary-olive">{displayId}</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2 w-full">
+                <div className="flex flex-col items-center p-2 bg-bg/50 rounded-lg border border-border-olive/50">
+                  <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1">
+                    <Link2 size={8} /> Base-ID
+                  </span>
+                  <span className="text-[12px] font-mono font-medium text-ink-light">{baseId}</span>
+                </div>
+                <div className="flex flex-col items-center p-2 bg-bg/50 rounded-lg border border-border-olive/50">
+                  <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1">
+                    <GitBranch size={8} /> Path-ID
+                  </span>
+                  <div className="flex flex-wrap justify-center gap-1">
+                    {pathIds.map((p, i) => (
+                      <span key={i} className="text-[10px] font-mono text-ink-light leading-none">{p}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 inline-block bg-primary-olive text-white px-3 py-1 rounded-full text-[11px] font-medium">
+              {getJavaneseDescendantTerm(shortestPath.split('.').length - 2)}
             </div>
             
             {individual.is_verified && (
@@ -122,10 +152,6 @@ export default function IndividualDetail({
                 </span>
               </div>
             )}
-            
-            <p className="text-[12px] text-ink-light mt-2">
-              {individual.birth_place || 'Gresik, Jawa Timur'}
-            </p>
           </div>
 
           <div className="space-y-8">
@@ -151,6 +177,9 @@ export default function IndividualDetail({
                     )) : <span className="font-medium text-ink">-</span>}
                   </div>
                 </div>
+                {/* ID section already added above, but we keep the children list as it's vital information. 
+                    If the user explicitly said "Remove Children Button", and we don't see a button, 
+                    maybe we should just keep the list for now but remove any header that looks like a button. */}
                 <div className="flex flex-col gap-0.5 pt-2">
                   <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Keturunan ({children.length})</span>
                   <div className="max-h-32 overflow-y-auto space-y-1 pr-2 mt-1">

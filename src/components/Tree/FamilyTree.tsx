@@ -17,6 +17,7 @@ import '@xyflow/react/dist/style.css';
 
 import IndividualNode from './IndividualNode';
 import { Individual, Marriage } from '@/types';
+import { generateGenealogyIDs } from '@/lib/genealogy';
 
 const nodeTypes = {
   individual: IndividualNode,
@@ -31,7 +32,7 @@ interface FamilyTreeProps {
 
 function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQuery }: FamilyTreeProps) {
   console.log('FamilyTreeContent rendering with', individuals.length, 'individuals');
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter } = useReactFlow();
 
   // Enhanced hierarchical layout logic
   const { initialNodes, initialEdges } = useMemo(() => {
@@ -41,90 +42,143 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     const edges: Edge[] = [];
     const indMap = new Map(individuals.map(i => [i.id, i]));
     
-    // 1. Assign generations (levels)
+    // 1. Assign generations (levels) - Improved robust logic
     const levels: Record<string, number> = {};
-    const rootIds = individuals
-      .filter(i => !i.father_id && !i.mother_id)
-      .map(i => i.id);
+    
+    // Initialize all to 0
+    individuals.forEach(i => levels[i.id] = 0);
 
-    // Initial roots
-    const queue: {id: string, level: number}[] = rootIds.map(id => ({id, level: 0}));
-    const seen = new Set<string>();
-
-    while (queue.length > 0) {
-      const { id, level } = queue.shift()!;
-      if (seen.has(id)) continue;
-      seen.add(id);
+    // Iteratively resolve levels (handles complex marriages and lineage)
+    let changed = true;
+    let iterations = 0;
+    while (changed && iterations < 50) {
+      changed = false;
+      iterations++;
       
-      levels[id] = Math.max(levels[id] || 0, level);
-      
-      // Ensure all spouses are at same level
-      const individualMarriages = marriages.filter(m => m.husband_id === id || m.wife_id === id);
-      individualMarriages.forEach(m => {
-        const spouseId = m.husband_id === id ? m.wife_id : m.husband_id;
-        if (spouseId && indMap.has(spouseId)) {
-          if (levels[spouseId] === undefined || levels[spouseId] < level) {
-            levels[spouseId] = level;
-          }
-          if (!seen.has(spouseId)) {
-            queue.push({ id: spouseId, level });
-          }
+      // Pass 1: Pedigree depth
+      individuals.forEach(ind => {
+        let maxParentLevel = -1;
+        if (ind.father_id && indMap.has(ind.father_id)) maxParentLevel = Math.max(maxParentLevel, levels[ind.father_id]);
+        if (ind.mother_id && indMap.has(ind.mother_id)) maxParentLevel = Math.max(maxParentLevel, levels[ind.mother_id]);
+        
+        const targetLevel = maxParentLevel + 1;
+        if (levels[ind.id] < targetLevel) {
+          levels[ind.id] = targetLevel;
+          changed = true;
         }
       });
-
-      const children = individuals.filter(child => child.father_id === id || child.mother_id === id);
-      children.forEach(child => {
-        queue.push({ id: child.id, level: level + 1 });
+      
+      // Pass 2: Sync Spouses (Marriages should be on the same level)
+      marriages.forEach(m => {
+        const hL = levels[m.husband_id];
+        const wL = levels[m.wife_id];
+        if (hL !== undefined && wL !== undefined && hL !== wL) {
+          const maxL = Math.max(hL, wL);
+          levels[m.husband_id] = maxL;
+          levels[m.wife_id] = maxL;
+          changed = true;
+        }
       });
     }
 
-    // Default 0 for anyone missed (orphaned)
-    individuals.forEach(i => {
-      if (levels[i.id] === undefined) levels[i.id] = 0;
-    });
-
-    // 2. Group by level
+    // 2. Group by level and prepare layout units (couples/singles)
     const groups: Record<number, string[]> = {};
     Object.entries(levels).forEach(([id, level]) => {
       if (!groups[level]) groups[level] = [];
       groups[level].push(id);
     });
 
-    // 3. Position nodes
-    const NODE_WIDTH = 220;
-    const HORIZONTAL_GAP = 120;
-    const VERTICAL_GAP = 350;
+    // Strategy: For each level, group spouses together so they appear side-by-side
+    const NODE_WIDTH = 240; 
+    const HORIZONTAL_GAP = 140; 
+    const VERTICAL_GAP = 400; 
+    const SPOUSE_GAP = 40; // Smaller gap for spouses
 
     Object.keys(groups).sort((a, b) => Number(a) - Number(b)).forEach(levelStr => {
       const level = Number(levelStr);
-      const ids = groups[level];
+      const levelIds = groups[level];
       
-      // Heuristic sort: keep children roughly below parents
-      ids.sort((a, b) => {
+      // Create groups of spouses and singles
+      const usedIds = new Set<string>();
+      const layoutUnits: string[][] = [];
+
+      // Sort individuals by their parent's average X position if parents exist
+      // This keeps branches clustered below their parents
+      levelIds.sort((a, b) => {
         const indA = indMap.get(a)!;
         const indB = indMap.get(b)!;
-        const pA = indA.father_id || indA.mother_id || '';
-        const pB = indB.father_id || indB.mother_id || '';
-        if (pA !== pB) return pA.localeCompare(pB);
+        
+        // Find parents
+        const pA = indA.father_id || indA.mother_id;
+        const pB = indB.father_id || indB.mother_id;
+        
+        if (pA && pB) return pA.localeCompare(pB);
+        if (pA) return -1;
+        if (pB) return 1;
         return indA.name.localeCompare(indB.name);
       });
 
-      ids.forEach((id, index) => {
-        const ind = indMap.get(id)!;
-        const isHighlighted = searchQuery && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
+      levelIds.forEach(id => {
+        if (usedIds.has(id)) return;
         
-        nodes.push({
-          id: ind.id,
-          type: 'individual',
-          data: { 
-            individual: ind,
-            isHighlighted: isHighlighted 
-          },
-          position: {
-            x: index * (NODE_WIDTH + HORIZONTAL_GAP) - (ids.length * (NODE_WIDTH + HORIZONTAL_GAP)) / 2,
-            y: level * VERTICAL_GAP,
-          },
-        });
+        const m = marriages.find(m => m.husband_id === id || m.wife_id === id);
+        if (m) {
+          const spouseId = m.husband_id === id ? m.wife_id : m.husband_id;
+          if (spouseId && indMap.has(spouseId) && levels[spouseId] === level) {
+            // Husband always first for consistent layout
+            const husband = indMap.get(m.husband_id)!;
+            const wife = indMap.get(m.wife_id)!;
+            layoutUnits.push([husband.id, wife.id]);
+            usedIds.add(husband.id);
+            usedIds.add(wife.id);
+            return;
+          }
+        }
+        
+        layoutUnits.push([id]);
+        usedIds.add(id);
+      });
+
+      // Position layout units
+      let currentX = -(layoutUnits.length * (NODE_WIDTH + HORIZONTAL_GAP)) / 2;
+      
+      layoutUnits.forEach((unit) => {
+        if (unit.length === 2) {
+          // Couple
+          unit.forEach((id, idx) => {
+            const ind = indMap.get(id)!;
+            const isHighlighted = searchQuery && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
+            const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+            nodes.push({
+              id: ind.id,
+              type: 'individual',
+              data: { 
+                individual: { ...ind, ref_code: displayId }, 
+                isHighlighted 
+              },
+              position: { 
+                x: currentX + (idx * (NODE_WIDTH + SPOUSE_GAP)), 
+                y: level * VERTICAL_GAP 
+              },
+            });
+          });
+          currentX += (2 * NODE_WIDTH) + SPOUSE_GAP + HORIZONTAL_GAP;
+        } else {
+          // Single
+          const ind = indMap.get(unit[0])!;
+          const isHighlighted = searchQuery && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
+          const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+          nodes.push({
+            id: ind.id,
+            type: 'individual',
+            data: { 
+              individual: { ...ind, ref_code: displayId }, 
+              isHighlighted 
+            },
+            position: { x: currentX, y: level * VERTICAL_GAP },
+          });
+          currentX += NODE_WIDTH + HORIZONTAL_GAP;
+        }
       });
     });
 
@@ -173,11 +227,36 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
   useEffect(() => {
     setNodes(initialNodes);
     setEdges(initialEdges);
+    
+    // Default focus on initial load or search match
     const timer = setTimeout(() => {
-      fitView({ padding: 0.15, duration: 800 });
-    }, 100);
+      if (searchQuery && searchQuery.length > 2) {
+        // Find matching node
+        const matchingNode = initialNodes.find(n => 
+          (n.data.individual as Individual).name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        
+        if (matchingNode) {
+          // Focus on the first match
+          setCenter(matchingNode.position.x + 120, matchingNode.position.y + 60, { zoom: 1, duration: 800 });
+        } else {
+          fitView({ padding: 0.2, duration: 800 });
+        }
+      } else {
+        // Default focus: Kiai Qomaruddin or first root
+        const rootNode = initialNodes.find(n => 
+          (n.data.individual as Individual).name.includes('Qomaruddin')
+        ) || initialNodes[0];
+
+        if (rootNode) {
+          setCenter(rootNode.position.x + 120, rootNode.position.y + 60, { zoom: 1, duration: 800 });
+        } else {
+          fitView({ padding: 0.2, duration: 800 });
+        }
+      }
+    }, 150);
     return () => clearTimeout(timer);
-  }, [initialNodes, initialEdges, setNodes, setEdges, fitView]);
+  }, [initialNodes, initialEdges, searchQuery, setNodes, setEdges, fitView, setCenter]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),

@@ -22,12 +22,12 @@ export default function IndividualNode({ data }: IndividualNodeProps) {
   return (
     <div
       className={cn(
-        'px-4 py-3 shadow-sm rounded-lg border transition-all duration-300 w-[200px]',
+        'px-4 py-3 shadow-sm rounded-lg border transition-all duration-300 w-[240px]',
         individual.gender === 'M' 
           ? 'bg-blue-50/30 border-blue-200/50' 
           : 'bg-rose-50/30 border-rose-200/50',
         isSelected ? 'border-primary-olive border-2 shadow-md bg-white' : '',
-        isHighlighted && 'ring-4 ring-accent-tan/50 border-primary-olive shadow-xl scale-105'
+        isHighlighted && 'ring-8 ring-primary-olive/30 border-primary-olive shadow-2xl scale-110 z-10'
       )}
     >
       <Handle type="target" position={Position.Top} className="w-2 h-2 !bg-accent-tan border-none" />
