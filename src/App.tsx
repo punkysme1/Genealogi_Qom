@@ -7,6 +7,7 @@ import IndividualDetail from '@/components/Sidebar/IndividualDetail';
 import LoginPage from '@/components/Auth/LoginPage';
 import AdminPanel from '@/components/Admin/AdminPanel';
 import { supabase } from '@/lib/supabase';
+import { cn } from '@/lib/utils';
 import { 
   Search, 
   Filter, 
@@ -18,9 +19,12 @@ import {
   ShieldCheck, 
   UserPlus, 
   RefreshCcw, 
-  Calendar 
+  Calendar,
+  Menu,
+  BarChart3,
+  X as CloseIcon
 } from 'lucide-react';
-import { AnimatePresence } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -80,6 +84,8 @@ export default function App() {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [adminTargetIndividual, setAdminTargetIndividual] = useState<Individual | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -140,69 +146,121 @@ export default function App() {
     setIsAdminPanelOpen(true);
   };
 
+  const toggleStats = () => setIsStatsOpen(!isStatsOpen);
+
   return (
     <ErrorBoundary>
       <div className="flex flex-col h-screen bg-bg overflow-hidden text-ink">
         {/* Header */}
-      <header className="h-16 bg-surface border-b border-border-olive flex items-center justify-between px-6 z-10">
+      <header className="h-16 bg-surface border-b border-border-olive flex items-center justify-between px-4 md:px-6 z-30">
         <div className="flex items-center gap-3">
-          <div className="bg-primary-olive w-8 h-8 rounded-lg flex items-center justify-center text-white font-serif font-bold">
+          <button 
+            onClick={toggleStats}
+            className="lg:hidden p-2 hover:bg-bg rounded-lg transition-colors text-primary-olive"
+          >
+            <BarChart3 size={20} />
+          </button>
+          <div className="bg-primary-olive w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center text-white font-serif font-bold text-sm md:text-base">
             Q
           </div>
-          <h1 className="text-xl font-serif font-bold italic text-primary-olive">Family Tree Qomaruddin</h1>
+          <h1 className="text-base md:text-xl font-serif font-bold italic text-primary-olive truncate max-w-[120px] md:max-w-none">Family Tree</h1>
           {user && (
-            <div className="ml-4 flex items-center gap-1.5 px-3 py-1 bg-primary-olive/10 text-primary-olive rounded-full text-[10px] font-bold uppercase tracking-widest border border-primary-olive/20">
-              <ShieldCheck size={12} /> Mode Admin
+            <div className="hidden sm:flex ml-2 md:ml-4 items-center gap-1.5 px-3 py-1 bg-primary-olive/10 text-primary-olive rounded-full text-[9px] font-bold uppercase tracking-widest border border-primary-olive/20 whitespace-nowrap">
+              <ShieldCheck size={10} /> Admin
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="relative">
+        <div className="flex items-center gap-2 md:gap-6">
+          <div className="relative hidden sm:block">
             <input
               type="text"
-              placeholder="Cari nama anggota keluarga..."
+              placeholder="Cari keluarga..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-4 pr-10 py-2 bg-bg border border-border-olive rounded-full text-[13px] transition-all w-[300px] focus:outline-none focus:ring-1 focus:ring-primary-olive"
+              className="pl-3 pr-8 py-1.5 bg-bg border border-border-olive rounded-full text-[12px] transition-all w-[150px] md:w-[250px] focus:outline-none focus:ring-1 focus:ring-primary-olive"
             />
           </div>
           
-          <div className="flex items-center gap-3">
-            <span className="text-[12px] font-bold text-primary-olive">9 Generations</span>
-            <div className="h-8 w-px bg-border-olive/50 mx-1" />
-            
+          <div className="flex items-center gap-2">
             {user ? (
               <div className="flex items-center gap-2">
                 <button 
                   onClick={handleAddNew}
-                  className="flex items-center gap-2 px-4 py-2 bg-accent-tan text-primary-olive rounded-full text-xs font-bold transition-all hover:bg-accent-tan/80"
+                  className="hidden md:flex items-center gap-2 px-4 py-2 bg-accent-tan text-primary-olive rounded-full text-xs font-bold transition-all hover:bg-accent-tan/80"
                 >
                   <UserPlus size={16} /> Tambah Data
                 </button>
                 <button 
                   onClick={handleLogout}
-                  className="flex items-center gap-2 px-4 py-2 hover:bg-rose-50 text-rose-600 rounded-full text-xs font-bold transition-all"
+                  className="p-2 hover:bg-rose-50 text-rose-600 rounded-full transition-all"
                 >
-                  <LogOut size={16} /> Keluar
+                  <LogOut size={18} />
                 </button>
               </div>
             ) : (
               <button 
                 onClick={() => setIsLoginOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-olive text-white rounded-full text-xs font-bold shadow-lg shadow-primary-olive/20 hover:bg-primary-olive/90 transition-all"
+                className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-primary-olive text-white rounded-full text-[11px] md:text-xs font-bold shadow-lg shadow-primary-olive/20 hover:bg-primary-olive/90 transition-all"
               >
-                <LogIn size={16} /> Admin Login
+                <LogIn size={16} className="hidden sm:block" /> Login
               </button>
             )}
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="sm:hidden p-2 hover:bg-bg rounded-lg transition-colors text-primary-olive"
+            >
+              <Search size={20} />
+            </button>
           </div>
         </div>
       </header>
 
+      {/* Mobile Search Bar */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="sm:hidden bg-surface border-b border-border-olive px-4 py-3 z-20"
+          >
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Cari nama keluarga..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
+                className="w-full pl-4 pr-10 py-2.5 bg-bg border border-border-olive rounded-xl text-[13px] focus:outline-none focus:ring-1 focus:ring-primary-olive"
+              />
+              <button onClick={() => setIsMobileMenuOpen(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-light">
+                <CloseIcon size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Main Content */}
-      <main className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: Demographics */}
-        <aside className="w-[260px] bg-surface border-r border-border-olive p-5 flex flex-col gap-8 overflow-y-auto">
+      <main className="flex-1 flex overflow-hidden relative">
+        {/* Stats / Demographics Sidebar - Responsive Overlay */}
+        <div className={cn(
+          "fixed inset-0 bg-ink/20 backdrop-blur-sm z-[35] lg:hidden transition-opacity duration-300",
+          isStatsOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        )} onClick={() => setIsStatsOpen(false)} />
+        
+        <aside className={cn(
+          "fixed inset-y-0 left-0 w-[280px] bg-surface border-r border-border-olive p-5 flex flex-col gap-8 overflow-y-auto transition-transform duration-300 ease-in-out z-[40] lg:relative lg:translate-x-0 lg:z-10 bg-white",
+          isStatsOpen ? "translate-x-0" : "-translate-x-full"
+        )}>
+          <div className="flex items-center justify-between lg:hidden mb-2">
+            <h2 className="font-serif font-bold text-primary-olive italic">Menu Demografi</h2>
+            <button onClick={() => setIsStatsOpen(false)} className="p-1 hover:bg-bg rounded-full">
+              <CloseIcon size={18} className="text-ink-light" />
+            </button>
+          </div>
+
           <div>
             <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3">Demografi Keturunan</h3>
             <div className="bg-bg p-4 rounded-xl border border-border-olive">
@@ -242,7 +300,7 @@ export default function App() {
                   .filter(i => i.birth_date && new Date(i.birth_date).getMonth() === new Date().getMonth())
                   .sort((a, b) => new Date(a.birth_date!).getDate() - new Date(b.birth_date!).getDate())
                   .map(ind => (
-                    <div key={ind.id} className="flex items-center gap-3 group cursor-pointer" onClick={() => setSelectedIndividual(ind)}>
+                    <div key={ind.id} className="flex items-center gap-3 group cursor-pointer" onClick={() => { setSelectedIndividual(ind); setIsStatsOpen(false); }}>
                       <div className="w-8 h-8 rounded-full bg-accent-tan/10 border border-accent-tan/20 flex items-center justify-center text-[10px] font-bold text-primary-olive shrink-0">
                         {new Date(ind.birth_date!).getDate()}
                       </div>
@@ -263,7 +321,7 @@ export default function App() {
           {user && (
             <div className="mt-auto pt-6 border-t border-border-olive space-y-3">
               <button 
-                onClick={handleAddNew}
+                onClick={() => { handleAddNew(); setIsStatsOpen(false); }}
                 className="w-full py-3 bg-primary-olive/5 border border-primary-olive/20 text-primary-olive rounded-xl text-xs font-bold hover:bg-primary-olive/10 transition-all flex items-center justify-center gap-2"
               >
                 <UserPlus size={14} /> Tambah Anggota Baru
@@ -279,7 +337,7 @@ export default function App() {
         </aside>
 
         {/* Tree Viewport */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative h-full">
           <FamilyTree 
             individuals={individuals} 
             marriages={marriages}
@@ -287,25 +345,25 @@ export default function App() {
             searchQuery={searchQuery}
           />
 
-          {/* Legend */}
-          <div className="absolute bottom-5 left-5 bg-surface/90 backdrop-blur-sm p-4 rounded-xl border border-border-olive shadow-lg flex flex-col gap-3 text-[11px]">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded-sm" />
+          {/* Legend - Responsive hide */}
+          <div className="absolute bottom-5 left-14 md:left-16 bg-surface/90 backdrop-blur-sm p-3 md:p-4 rounded-xl border border-border-olive shadow-lg flex flex-col gap-2 md:gap-3 text-[10px] md:text-[11px] max-w-[calc(100vw-60px)] pointer-events-none">
+            <div className="flex items-center gap-4 md:gap-6">
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <div className="w-2.5 h-2.5 md:w-3 md:h-3 bg-blue-100 border border-blue-300 rounded-sm" />
                 <span className="font-bold text-blue-700">Laki-laki</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-rose-100 border border-rose-300 rounded-sm" />
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <div className="w-2.5 h-2.5 md:w-3 md:h-3 bg-rose-100 border border-rose-300 rounded-sm" />
                 <span className="font-bold text-rose-700">Perempuan</span>
               </div>
             </div>
             <div className="h-px bg-border-olive/30 w-full" />
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-verified-green rounded-full" />
+            <div className="flex items-center justify-between gap-3 md:gap-4">
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <div className="w-2 h-2 md:w-2.5 md:h-2.5 bg-verified-green rounded-full" />
                 <span className="text-ink-light">Terverifikasi</span>
               </div>
-              <div className="font-mono text-primary-olive/60 font-bold bg-bg px-2 py-0.5 rounded">Gen: 1 — 9</div>
+              <div className="font-mono text-primary-olive/60 font-bold bg-bg px-1.5 py-0.5 rounded text-[9px] md:text-[10px]">Gen: 1 — 9</div>
             </div>
           </div>
         </div>
