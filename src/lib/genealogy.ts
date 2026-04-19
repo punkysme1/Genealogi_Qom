@@ -83,34 +83,80 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
 }
 
 /**
- * Generates the 3 types of IDs: Base-ID, Path-ID, and Display-ID (Alphanumeric).
- * The Display-ID prioritizes the shortest path that stems from the primary root (Code '1').
+ * Generates the 3 types of IDs: Base-ID, Path-ID, and Display-ID.
+ * 
+ * 1. Base-ID: Patronymic string (e.g., "Aqib bin Abdurrohman").
+ * 2. Display-ID: The most significant patronymic link.
+ * 3. Path-ID: List of full lineage strings in Arabic style.
  */
 export function generateGenealogyIDs(individual: Individual, allIndividuals: Individual[], marriages: Marriage[]) {
-  const baseId = individual.id.substring(0, 6).toUpperCase();
-  const pathIds = calculatePathIDs(individual.id, allIndividuals, marriages);
-  
-  // Prioritize paths starting with '1' (Kiai Qomaruddin)
-  const significantPaths = pathIds.filter(p => p.startsWith('1'));
-  const candidatePaths = significantPaths.length > 0 ? significantPaths : pathIds;
+  const getParentName = (id: string | null) => {
+    if (!id) return null;
+    return allIndividuals.find(i => i.id === id)?.name || null;
+  };
 
-  // Display-ID Logic: 
-  // 1. MIN(length(path_id)) within candidates
-  // 2. Smallest alphanumeric order
-  const sortedPaths = [...candidatePaths].sort((a, b) => {
-    if (a.length !== b.length) return a.length - b.length;
-    return a.localeCompare(b);
-  });
+  const fatherName = getParentName(individual.father_id);
+  const motherName = getParentName(individual.mother_id);
+  const connector = individual.gender === 'M' ? 'bin' : 'binti';
+
+  // Base Patronimic: Name + Parent
+  const primaryParentName = fatherName || motherName;
+  const baseId = primaryParentName ? `${individual.name} ${connector} ${primaryParentName}` : individual.name;
   
-  const shortestPath = sortedPaths[0] || '?';
-  const displayId = `QMR-${baseId}.${shortestPath}`;
+  // Display ID should be concise but informative
+  const displayId = primaryParentName ? `${connector} ${primaryParentName}` : 'Root';
+
+  // Trace all paths and convert to Arabic Name strings
+  // We'll reuse the logic but map it to names
+  const rawPaths = calculatePathIDs(individual.id, allIndividuals, marriages);
   
+  // Since we want full Arabic paths, we need a separate function for naming
+  const arabicPaths = calculateArabicLineage(individual.id, allIndividuals);
+
   return {
     baseId,
-    pathIds,
+    pathIds: arabicPaths, // Show full Arabic paths
     displayId,
-    shortestPath
+    shortestPath: rawPaths[0] || ''
   };
+}
+
+/**
+ * Helper to calculate all lineage paths with names in Arabic style (bin/binti).
+ */
+export function calculateArabicLineage(individualId: string, allIndividuals: Individual[]): string[] {
+  const paths: string[] = [];
+  const indMap = new Map(allIndividuals.map(i => [i.id, i]));
+  
+  function traceUp(currId: string, currentChain: string[]): void {
+    const ind = indMap.get(currId);
+    if (!ind) return;
+
+    const newChain = [...currentChain, ind.name];
+
+    // If root (no parents left) OR we hit Kiai Qomaruddin, stop and save
+    if (ind.name.includes('Qomaruddin')) {
+      const formattedChain = newChain.map((name, idx) => {
+        if (idx === newChain.length - 1) return name;
+        const currentInd = allIndividuals.find(i => i.name === name);
+        const nextConnector = currentInd?.gender === 'M' ? 'bin' : 'binti';
+        return `${name} ${nextConnector}`;
+      }).join(' ');
+      paths.push(formattedChain);
+      return;
+    }
+
+    // Stop if it's a root that is NOT Kiai Qomaruddin (to hide dead-end paths)
+    if (!ind.father_id && !ind.mother_id) {
+      return;
+    }
+
+    if (ind.father_id) traceUp(ind.father_id, newChain);
+    if (ind.mother_id) traceUp(ind.mother_id, newChain);
+  }
+
+  traceUp(individualId, []);
+  return Array.from(new Set(paths));
 }
 
 /**

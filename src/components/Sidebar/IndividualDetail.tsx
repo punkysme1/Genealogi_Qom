@@ -113,35 +113,39 @@ export default function IndividualDetail({
             <h2 className="text-xl font-bold text-ink">{individual.name}</h2>
             
             <div className="mt-4 flex flex-col items-center gap-2">
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-border-olive w-full shadow-sm">
-                <span className="text-[9px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1">
-                  <Fingerprint size={10} /> Display-ID
+              <div className="flex flex-col items-center p-3 bg-white rounded-xl border border-border-olive w-full shadow-sm">
+                <span className="text-[10px] font-bold text-ink-light uppercase tracking-widest flex items-center gap-1.5 mb-1">
+                  <Fingerprint size={12} className="text-primary-olive" /> Nasab Utama
                 </span>
-                <span className="text-[14px] font-mono font-bold text-primary-olive">{displayId}</span>
+                <span className="text-[14px] font-bold text-primary-olive tracking-tight text-center">{displayId}</span>
               </div>
               
-              <div className="grid grid-cols-2 gap-2 w-full">
-                <div className="flex flex-col items-center p-2 bg-bg/50 rounded-lg border border-border-olive/50">
-                  <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1">
-                    <Link2 size={8} /> Base-ID
+              <div className="grid grid-cols-1 gap-2 w-full">
+                <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-border-olive/60">
+                  <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1 mb-1">
+                    <Link2 size={10} /> Nama Lengkap / Nasab
                   </span>
-                  <span className="text-[12px] font-mono font-medium text-ink-light">{baseId}</span>
+                  <span className="text-[11px] font-bold text-ink text-center">{baseId}</span>
+                  <span className="text-[7px] text-ink-light uppercase font-medium mt-0.5 whitespace-nowrap">Format Bin/Binti</span>
                 </div>
-                <div className="flex flex-col items-center p-2 bg-bg/50 rounded-lg border border-border-olive/50">
-                  <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1">
-                    <GitBranch size={8} /> Path-ID
+                <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-border-olive/60">
+                  <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1 mb-1">
+                    <GitBranch size={10} /> Seluruh Mata Rantai Silsilah
                   </span>
-                  <div className="flex flex-wrap justify-center gap-1">
+                  <div className="flex flex-col gap-2 w-full max-h-32 overflow-y-auto px-2">
                     {pathIds.map((p, i) => (
-                      <span key={i} className="text-[10px] font-mono text-ink-light leading-none">{p}</span>
+                      <div key={i} className="text-[9px] font-medium text-primary-olive bg-accent-tan/10 p-1.5 rounded border border-accent-tan/20 leading-relaxed italic text-center">
+                        {p}
+                      </div>
                     ))}
                   </div>
+                  <span className="text-[7px] text-ink-light uppercase font-medium mt-1">Ditemukan {pathIds.length} Mata Rantai</span>
                 </div>
               </div>
             </div>
 
             <div className="mt-4 inline-block bg-primary-olive text-white px-3 py-1 rounded-full text-[11px] font-medium">
-              {getJavaneseDescendantTerm(shortestPath.split('.').length - 2)}
+              {getJavaneseDescendantTerm(shortestPath.length - 2)}
             </div>
             
             {individual.is_verified && (
