@@ -21,103 +21,152 @@ export function suggestHenryCode(parentCode: string | undefined, childrenCount: 
  * Converts a child index (1-based) to an alphanumeric character (1-9, A-Z).
  */
 function toAlphaNumeric(index: number): string {
-  if (index < 1) return '?';
+  if (index < 1) return '0';
   if (index <= 9) return index.toString();
-  if (index <= 35) return String.fromCharCode(65 + (index - 10)); // 10 -> A (65), 11 -> B (66)...
-  return '?'; // Should not happen in this context usually
+  if (index <= 35) return String.fromCharCode(65 + (index - 10)); // 10 -> A, 11 -> B...
+  return '?'; 
+}
+
+/**
+ * Calculates generation levels and global ranks for all individuals.
+ * Generation G0 = Kiai Qomaruddin.
+ */
+export function calculateGenerations(allIndividuals: Individual[]) {
+  const levels: Record<string, number> = {};
+  if (!allIndividuals || !Array.isArray(allIndividuals)) return { levels, ranks: {} as Record<string, number> };
+
+  const root = allIndividuals.find(i => i && i.name && i.name.includes('Qomaruddin'));
+  
+  if (!root) return { levels, ranks: {} as Record<string, number> };
+
+  // BFS to find shortest path depth from Qomaruddin
+  const queue: { id: string, level: number }[] = [{ id: root.id, level: 0 }];
+  levels[root.id] = 0;
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || !current.id) continue;
+    const { id, level } = current;
+    
+    const children = allIndividuals.filter(i => i && (i.father_id === id || i.mother_id === id));
+    
+    children.forEach(child => {
+      if (child && child.id && (levels[child.id] === undefined || levels[child.id] > level + 1)) {
+        levels[child.id] = level + 1;
+        queue.push({ id: child.id, level: level + 1 });
+      }
+    });
+  }
+
+  // Calculate global ranks per level
+  const ranks: Record<string, number> = {};
+  const individualsByLevel: Record<number, Individual[]> = {};
+
+  allIndividuals.forEach(ind => {
+    if (!ind) return;
+    const level = levels[ind.id];
+    if (level !== undefined) {
+      if (!individualsByLevel[level]) individualsByLevel[level] = [];
+      individualsByLevel[level].push(ind);
+    }
+  });
+
+  Object.entries(individualsByLevel).forEach(([levelStr, members]) => {
+    // Sort by birth date, then name
+    members.sort((a, b) => {
+      const dateA = a?.birth_date || '9999-12-31';
+      const dateB = b?.birth_date || '9999-12-31';
+      const nameA = a?.name || '';
+      const nameB = b?.name || '';
+      return dateA.localeCompare(dateB) || nameA.localeCompare(nameB);
+    });
+    members.forEach((m, idx) => {
+      if (m && m.id) ranks[m.id] = idx + 1;
+    });
+  });
+
+  return { levels, ranks };
 }
 
 /**
  * Calculates all possible lineage paths for an individual using recursive tracing.
- * Uses alphanumeric encoding (1-9, A-Z) and removes separators.
- * Prioritizes "Kiai Qomaruddin" as the primary root (Code '1').
  */
-export function calculatePathIDs(individualId: string, allIndividuals: Individual[], marriages: Marriage[]): string[] {
+export function calculatePathIDs(individualId: string, allIndividuals: Individual[]): string[] {
+  if (!individualId || !allIndividuals || !Array.isArray(allIndividuals)) return [];
+  
   const paths: string[] = [];
-  
-  // Designate roots: individuals without parents
-  const rawRoots = allIndividuals.filter(i => !i.father_id && !i.mother_id);
-  
-  // Prioritize Kiai Qomaruddin as index 1 if found
-  const roots = [...rawRoots].sort((a, b) => {
-    const isQomaruddinA = a.name.includes('Qomaruddin');
-    const isQomaruddinB = b.name.includes('Qomaruddin');
-    if (isQomaruddinA && !isQomaruddinB) return -1;
-    if (!isQomaruddinA && isQomaruddinB) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  const root = allIndividuals.find(i => i && i.name && i.name.includes('Qomaruddin'));
+  if (!root) return [];
   
   function findPaths(currentId: string, currentPath: string, visited: Set<string>) {
-    // Current individual matches target
     if (currentId === individualId) {
-      paths.push(currentPath);
+      paths.push(currentPath || 'G0');
     }
 
-    if (visited.has(currentId)) return; // Prevent cycles
+    if (!currentId || visited.has(currentId)) return; 
     const nextVisited = new Set(visited);
     nextVisited.add(currentId);
 
-    // Find children
-    const children = allIndividuals.filter(i => i.father_id === currentId || i.mother_id === currentId);
+    const children = allIndividuals.filter(i => i && (i.father_id === currentId || i.mother_id === currentId));
     
-    // Stable sibling sorting (by birth date then name)
     children.sort((a, b) => {
-      const dateA = a.birth_date || '9999-12-31';
-      const dateB = b.birth_date || '9999-12-31';
-      return dateA.localeCompare(dateB) || a.name.localeCompare(b.name);
+      const dateA = a?.birth_date || '9999-12-31';
+      const dateB = b?.birth_date || '9999-12-31';
+      const nameA = a?.name || '';
+      const nameB = b?.name || '';
+      return dateA.localeCompare(dateB) || nameA.localeCompare(nameB);
     });
 
     children.forEach((child, index) => {
-      const siblingIndex = index + 1;
-      const nextPath = `${currentPath}${toAlphaNumeric(siblingIndex)}`;
+      if (!child) return;
+      const nextPath = `${currentPath}${toAlphaNumeric(index + 1)}`;
       findPaths(child.id, nextPath, nextVisited);
     });
   }
 
-  roots.forEach((root, idx) => {
-    const rootCode = toAlphaNumeric(idx + 1);
-    findPaths(root.id, rootCode, new Set());
-  });
-
+  findPaths(root.id, '', new Set());
   return Array.from(new Set(paths));
 }
 
 /**
  * Generates the 3 types of IDs: Base-ID, Path-ID, and Display-ID.
- * 
- * 1. Base-ID: Patronymic string (e.g., "Aqib bin Abdurrohman").
- * 2. Display-ID: The most significant patronymic link.
- * 3. Path-ID: List of full lineage strings in Arabic style.
  */
-export function generateGenealogyIDs(individual: Individual, allIndividuals: Individual[], marriages: Marriage[]) {
-  const getParentName = (id: string | null) => {
-    if (!id) return null;
-    return allIndividuals.find(i => i.id === id)?.name || null;
-  };
+export function generateGenealogyIDs(individual: Individual | null, allIndividuals: Individual[], marriages: Marriage[]) {
+  if (!individual || !individual.id) {
+    return {
+      baseId: '-',
+      pathIds: [], 
+      displayId: '-',
+      shortestPath: '',
+      alphaPaths: []
+    };
+  }
 
-  const fatherName = getParentName(individual.father_id);
-  const motherName = getParentName(individual.mother_id);
-  const connector = individual.gender === 'M' ? 'bin' : 'binti';
-
-  // Base Patronimic: Name + Parent
-  const primaryParentName = fatherName || motherName;
-  const baseId = primaryParentName ? `${individual.name} ${connector} ${primaryParentName}` : individual.name;
+  const { levels, ranks } = calculateGenerations(allIndividuals);
   
-  // Display ID should be concise but informative
-  const displayId = primaryParentName ? `${connector} ${primaryParentName}` : 'Root';
+  const level = levels[individual.id];
+  const rank = ranks[individual.id];
 
-  // Trace all paths and convert to Arabic Name strings
-  // We'll reuse the logic but map it to names
-  const rawPaths = calculatePathIDs(individual.id, allIndividuals, marriages);
+  // Base-ID: G[Level].[Rank]
+  const baseId = level !== undefined ? `G${level}.${rank}` : 'Outer';
   
-  // Since we want full Arabic paths, we need a separate function for naming
-  const arabicPaths = calculateArabicLineage(individual.id, allIndividuals);
+  // Alphanumeric paths for Display-ID logic
+  const alphaPaths = calculatePathIDs(individual.id, allIndividuals) || [];
+  const sortedAlpha = [...alphaPaths].sort((a, b) => a.length - b.length || a.localeCompare(b));
+  
+  // Display-ID: Shortest Alphanumeric
+  const shortestAlpha = sortedAlpha[0] || (individual.name && individual.name.includes('Qomaruddin') ? 'G0' : 'Root');
+  const displayId = shortestAlpha;
+
+  // Path-ID: Arabic Lineage as requested (bin/binti)
+  const pathIds = calculateArabicLineage(individual.id, allIndividuals) || [];
 
   return {
     baseId,
-    pathIds: arabicPaths, // Show full Arabic paths
+    pathIds, 
     displayId,
-    shortestPath: rawPaths[0] || ''
+    shortestPath: shortestAlpha,
+    alphaPaths
   };
 }
 
@@ -125,12 +174,14 @@ export function generateGenealogyIDs(individual: Individual, allIndividuals: Ind
  * Helper to calculate all lineage paths with names in Arabic style (bin/binti).
  */
 export function calculateArabicLineage(individualId: string, allIndividuals: Individual[]): string[] {
+  if (!individualId || !allIndividuals || !Array.isArray(allIndividuals)) return [];
+  
   const paths: string[] = [];
-  const indMap = new Map(allIndividuals.map(i => [i.id, i]));
+  const indMap = new Map(allIndividuals.filter(i => i && i.id).map(i => [i.id, i]));
   
   function traceUp(currId: string, currentChain: string[]): void {
     const ind = indMap.get(currId);
-    if (!ind) return;
+    if (!ind || !ind.name) return;
 
     const newChain = [...currentChain, ind.name];
 
@@ -138,7 +189,9 @@ export function calculateArabicLineage(individualId: string, allIndividuals: Ind
     if (ind.name.includes('Qomaruddin')) {
       const formattedChain = newChain.map((name, idx) => {
         if (idx === newChain.length - 1) return name;
-        const currentInd = allIndividuals.find(i => i.name === name);
+        // Search for this person in allIndividuals to find their gender
+        // We find by name but restricted to the current branch contexts if possible
+        const currentInd = allIndividuals.find(i => i && i.name === name);
         const nextConnector = currentInd?.gender === 'M' ? 'bin' : 'binti';
         return `${name} ${nextConnector}`;
       }).join(' ');
@@ -150,6 +203,9 @@ export function calculateArabicLineage(individualId: string, allIndividuals: Ind
     if (!ind.father_id && !ind.mother_id) {
       return;
     }
+
+    // Avoid infinite loops (safety)
+    if (currentChain.includes(ind.name)) return;
 
     if (ind.father_id) traceUp(ind.father_id, newChain);
     if (ind.mother_id) traceUp(ind.mother_id, newChain);

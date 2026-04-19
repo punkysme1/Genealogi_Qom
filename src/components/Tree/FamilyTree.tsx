@@ -244,9 +244,9 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         }
       } else {
         // Default focus: Kiai Qomaruddin or first root
-        const rootNode = initialNodes.find(n => 
-          (n.data.individual as Individual).name.includes('Qomaruddin')
-        ) || initialNodes[0];
+        const rootNode = initialNodes.length > 0 
+          ? (initialNodes.find(n => (n.data.individual as Individual).name?.includes('Qomaruddin')) || initialNodes[0])
+          : null;
 
         if (rootNode) {
           setCenter(rootNode.position.x + 120, rootNode.position.y + 60, { zoom: 1, duration: 800 });

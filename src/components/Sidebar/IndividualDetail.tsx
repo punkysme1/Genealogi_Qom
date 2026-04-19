@@ -66,7 +66,13 @@ export default function IndividualDetail({
 
   if (!individual) return null;
 
-  const { baseId, pathIds, displayId, shortestPath } = generateGenealogyIDs(individual, individuals, marriages);
+  const { 
+    baseId, 
+    pathIds, 
+    displayId, 
+    shortestPath, 
+    alphaPaths
+  } = generateGenealogyIDs(individual, individuals, marriages);
 
   const father = individuals.find(i => i?.id === individual.father_id);
   const mother = individuals.find(i => i?.id === individual.mother_id);
@@ -116,7 +122,7 @@ export default function IndividualDetail({
             <div className="mt-4 flex flex-col items-center gap-2">
               <div className="flex flex-col items-center p-3 bg-white rounded-xl border border-border-olive w-full shadow-sm">
                 <span className="text-[10px] font-bold text-ink-light uppercase tracking-widest flex items-center gap-1.5 mb-1">
-                  <Fingerprint size={12} className="text-primary-olive" /> Nasab Utama
+                  <Fingerprint size={12} className="text-primary-olive" /> Nasab Utama (Alfanumerik)
                 </span>
                 <span className="text-[14px] font-bold text-primary-olive tracking-tight text-center">{displayId}</span>
               </div>
@@ -124,29 +130,38 @@ export default function IndividualDetail({
               <div className="grid grid-cols-1 gap-2 w-full">
                 <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-border-olive/60">
                   <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1 mb-1">
-                    <Link2 size={10} /> Nama Lengkap / Nasab
+                    <Link2 size={10} /> Kode Generasi & Urutan (Base-ID)
                   </span>
                   <span className="text-[11px] font-bold text-ink text-center">{baseId}</span>
-                  <span className="text-[7px] text-ink-light uppercase font-medium mt-0.5 whitespace-nowrap">Format Bin/Binti</span>
+                  <span className="text-[7px] text-ink-light uppercase font-medium mt-0.5 whitespace-nowrap">Format G[Gen].[No]</span>
                 </div>
                 <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-border-olive/60">
                   <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1 mb-1">
-                    <GitBranch size={10} /> Seluruh Mata Rantai Silsilah
+                    <GitBranch size={10} /> Macam Jalur (Format Arab: bin/binti)
                   </span>
-                  <div className="flex flex-col gap-2 w-full max-h-32 overflow-y-auto px-2">
-                    {pathIds.map((p, i) => (
-                      <div key={i} className="text-[9px] font-medium text-primary-olive bg-accent-tan/10 p-1.5 rounded border border-accent-tan/20 leading-relaxed italic text-center">
+                  <div className="flex flex-col gap-2 w-full max-h-48 overflow-y-auto px-2 mt-1">
+                    {pathIds && pathIds.length > 0 ? pathIds.map((p, i) => (
+                      <div key={i} className="text-[9px] font-medium text-primary-olive bg-accent-tan/10 p-1.5 rounded border border-accent-tan/20 leading-relaxed text-center group relative cursor-help italic">
                         {p}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-ink text-white text-[8px] rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl font-mono not-italic">
+                          Shortcode: {alphaPaths && alphaPaths[i] ? alphaPaths[i] : displayId}
+                        </div>
                       </div>
-                    ))}
+                    )) : (
+                      <div className="text-[9px] italic text-ink-light text-center p-2 bg-bg border border-border-olive/50 rounded">
+                        Belum terhubung ke Kiai Qomaruddin
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[7px] text-ink-light uppercase font-medium mt-1">Ditemukan {pathIds.length} Mata Rantai</span>
+                  <span className="text-[7px] text-ink-light uppercase font-medium mt-1">Ditemukan {pathIds.length} Jalur</span>
                 </div>
               </div>
             </div>
 
             <div className="mt-4 inline-block bg-primary-olive text-white px-3 py-1 rounded-full text-[11px] font-medium">
-              {getJavaneseDescendantTerm(shortestPath.length - 2)}
+              {shortestPath === 'Root' || shortestPath === 'G0' || shortestPath === '' 
+                ? 'Pendiri / Leluhur Utama' 
+                : getJavaneseDescendantTerm(shortestPath.length - 2)}
             </div>
             
             {individual.is_verified && (

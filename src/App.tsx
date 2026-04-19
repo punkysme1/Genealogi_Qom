@@ -8,6 +8,7 @@ import LoginPage from '@/components/Auth/LoginPage';
 import AdminPanel from '@/components/Admin/AdminPanel';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { generateGenealogyIDs } from '@/lib/genealogy';
 import { 
   Search, 
   Filter, 
@@ -86,6 +87,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<Individual[]>([]);
 
   const fetchData = async () => {
     try {
@@ -114,6 +116,30 @@ export default function App() {
       console.error('Error fetching data, using mock data:', err);
     }
   };
+
+  useEffect(() => {
+    if (searchQuery.trim().length > 1) {
+      // Find individuals whose name matches OR whose Display-ID/Shortcode matches
+      const results = (individuals || []).filter(ind => {
+        if (!ind || !ind.name) return false;
+        const nameMatches = ind.name.toLowerCase().includes(searchQuery.toLowerCase());
+        
+        // Also check if the alphanumeric code matches if user is typing a code
+        // We calculate ID on the fly for search if name doesn't match
+        if (nameMatches) return true;
+        
+        try {
+          const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+          return displayId.toLowerCase().includes(searchQuery.toLowerCase());
+        } catch (e) {
+          return false;
+        }
+      }).slice(0, 50); // Show more results to ensure duplicates show up
+      setSearchResults(results);
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery, individuals]);
 
   useEffect(() => {
     fetchData();
@@ -180,6 +206,47 @@ export default function App() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-3 pr-8 py-1.5 bg-bg border border-border-olive rounded-full text-[12px] transition-all w-[150px] md:w-[250px] focus:outline-none focus:ring-1 focus:ring-primary-olive"
             />
+            
+            {/* Search Results Dropdown */}
+            <AnimatePresence>
+              {searchResults.length > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute top-full mt-2 left-0 right-0 bg-white border border-border-olive rounded-xl shadow-xl z-50 py-2 max-h-[300px] overflow-y-auto"
+                >
+                  {searchResults.map(ind => {
+                    const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+                    return (
+                      <button
+                        key={ind.id}
+                        onClick={() => {
+                          setSelectedIndividual(ind);
+                          setSearchQuery(ind.name);
+                          setSearchResults([]);
+                        }}
+                        className="w-full px-4 py-2 hover:bg-bg flex items-center justify-between group transition-colors text-left"
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <p className="text-[12px] font-bold text-ink truncate group-hover:text-primary-olive">{ind.name || 'Tanpa Nama'}</p>
+                          <p className="text-[10px] text-ink-light truncate italic">
+                            {ind.father_id ? `bin ${(individuals || []).find(p => p?.id === ind.father_id)?.name || '???'}` : 
+                             ind.mother_id ? `binti ${(individuals || []).find(p => p?.id === ind.mother_id)?.name || '???'}` : 
+                             'Root'}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="text-[9px] font-mono font-bold bg-accent-tan/20 text-primary-olive px-1.5 py-0.5 rounded border border-accent-tan/30 leading-none">
+                            {displayId}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           
           <div className="flex items-center gap-2">
@@ -238,6 +305,41 @@ export default function App() {
                 <CloseIcon size={16} />
               </button>
             </div>
+
+            {/* Mobile Search Results */}
+            <AnimatePresence>
+              {searchResults.length > 0 && (
+                <div className="mt-4 space-y-2 max-h-[300px] overflow-y-auto">
+                  {searchResults.map(ind => {
+                    const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+                    return (
+                      <button
+                        key={ind.id}
+                        onClick={() => {
+                          setSelectedIndividual(ind);
+                          setIsMobileMenuOpen(false);
+                          setSearchQuery(ind.name || '');
+                          setSearchResults([]);
+                        }}
+                        className="w-full p-4 bg-bg border border-border-olive rounded-xl flex justify-between items-center"
+                      >
+                        <div className="text-left flex-1 min-w-0 pr-4">
+                          <p className="text-[14px] font-bold text-ink truncate">{ind.name || 'Tanpa Nama'}</p>
+                          <p className="text-[11px] text-ink-light italic truncate">
+                             {ind.father_id ? `bin ${(individuals || []).find(p => p?.id === ind.father_id)?.name || '???'}` : 
+                              ind.mother_id ? `binti ${(individuals || []).find(p => p?.id === ind.mother_id)?.name || '???'}` : 
+                              'Root'}
+                          </p>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold bg-primary-olive/10 text-primary-olive px-2 py-1 rounded shrink-0">
+                          {displayId}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
