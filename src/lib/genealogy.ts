@@ -24,7 +24,7 @@ function toAlphaNumeric(index: number): string {
   if (index < 1) return '0';
   if (index <= 9) return index.toString();
   if (index <= 35) return String.fromCharCode(65 + (index - 10)); // 10 -> A, 11 -> B...
-  return '?'; 
+  return `(${index})`; // Fallback for more than 35 siblings
 }
 
 /**
@@ -98,6 +98,8 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
   const root = allIndividuals.find(i => i && i.name && i.name.includes('Qomaruddin'));
   if (!root) return [];
   
+  const indMap = new Map(allIndividuals.filter(i => i && i.id).map(i => [i.id, i]));
+  
   function findPaths(currentId: string, currentPath: string, visited: Set<string>) {
     if (currentId === individualId) {
       paths.push(currentPath || 'G0');
@@ -118,7 +120,7 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
     });
 
     children.forEach((child, index) => {
-      if (!child) return;
+      if (!child || !child.id) return;
       const nextPath = `${currentPath}${toAlphaNumeric(index + 1)}`;
       findPaths(child.id, nextPath, nextVisited);
     });
@@ -179,19 +181,20 @@ export function calculateArabicLineage(individualId: string, allIndividuals: Ind
   const paths: string[] = [];
   const indMap = new Map(allIndividuals.filter(i => i && i.id).map(i => [i.id, i]));
   
-  function traceUp(currId: string, currentChain: string[]): void {
+  function traceUp(currId: string, chainIds: string[], chainNames: string[]): void {
     const ind = indMap.get(currId);
     if (!ind || !ind.name) return;
 
-    const newChain = [...currentChain, ind.name];
+    const newChainNames = [...chainNames, ind.name];
+    const newChainIds = [...chainIds, ind.id];
 
     // If root (no parents left) OR we hit Kiai Qomaruddin, stop and save
     if (ind.name.includes('Qomaruddin')) {
-      const formattedChain = newChain.map((name, idx) => {
-        if (idx === newChain.length - 1) return name;
-        // Search for this person in allIndividuals to find their gender
-        // We find by name but restricted to the current branch contexts if possible
-        const currentInd = allIndividuals.find(i => i && i.name === name);
+      const formattedChain = newChainNames.map((name, idx) => {
+        if (idx === newChainNames.length - 1) return name;
+        
+        // Find the specific individual in this step to check gender
+        const currentInd = indMap.get(newChainIds[idx]);
         const nextConnector = currentInd?.gender === 'M' ? 'bin' : 'binti';
         return `${name} ${nextConnector}`;
       }).join(' ');
@@ -199,19 +202,22 @@ export function calculateArabicLineage(individualId: string, allIndividuals: Ind
       return;
     }
 
-    // Stop if it's a root that is NOT Kiai Qomaruddin (to hide dead-end paths)
+    // Stop if it's a root that is NOT Kiai Qomaruddin
     if (!ind.father_id && !ind.mother_id) {
       return;
     }
 
-    // Avoid infinite loops (safety)
-    if (currentChain.includes(ind.name)) return;
-
-    if (ind.father_id) traceUp(ind.father_id, newChain);
-    if (ind.mother_id) traceUp(ind.mother_id, newChain);
+    // Use ID for cycle detection to allow repeated names like "Umamah" in different generations
+    if (ind.father_id && !chainIds.includes(ind.father_id)) {
+      traceUp(ind.father_id, newChainIds, newChainNames);
+    }
+    
+    if (ind.mother_id && !chainIds.includes(ind.mother_id)) {
+      traceUp(ind.mother_id, newChainIds, newChainNames);
+    }
   }
 
-  traceUp(individualId, []);
+  traceUp(individualId, [], []);
   return Array.from(new Set(paths));
 }
 

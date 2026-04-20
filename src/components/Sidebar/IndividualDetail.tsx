@@ -120,11 +120,24 @@ export default function IndividualDetail({
             <h2 className="text-xl font-bold text-ink">{individual.name}</h2>
             
             <div className="mt-4 flex flex-col items-center gap-2">
-              <div className="flex flex-col items-center p-3 bg-white rounded-xl border border-border-olive w-full shadow-sm">
-                <span className="text-[10px] font-bold text-ink-light uppercase tracking-widest flex items-center gap-1.5 mb-1">
+              <div className="flex flex-col items-center p-3 bg-white rounded-xl border border-border-olive w-full shadow-sm group relative">
+                <span className="text-[10px] font-bold text-ink-light uppercase tracking-widest flex items-center gap-1.5 mb-1 cursor-help">
                   <Fingerprint size={12} className="text-primary-olive" /> Nasab Utama (Alfanumerik)
+                  <Info size={10} className="text-accent-tan" />
                 </span>
                 <span className="text-[14px] font-bold text-primary-olive tracking-tight text-center">{displayId}</span>
+                
+                {/* Tooltip Explanation */}
+                <div className="absolute top-full left-0 right-0 mt-2 p-3 bg-ink text-white text-[10px] rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-50 shadow-2xl border border-white/10 leading-relaxed">
+                  <p className="font-bold border-b border-white/20 pb-1 mb-2 text-accent-tan">Cara Membaca Kode:</p>
+                  <ul className="space-y-1 text-white/80">
+                    <li>• Tiap karakter = 1 Generasi</li>
+                    <li>• <span className="text-white font-bold">1-9</span> = Anak ke-1 s/d 9</li>
+                    <li>• <span className="text-white font-bold">A-Z</span> = Anak ke-10 s/d 35</li>
+                    <li>• <span className="text-white font-bold">(n)</span> = Anak ke-36+ (kembali ke angka)</li>
+                    <li className="pt-1 italic opacity-60 text-[9px]">Contoh: 2(40) (Anak ke-2 → Anak ke-40)</li>
+                  </ul>
+                </div>
               </div>
               
               <div className="grid grid-cols-1 gap-2 w-full">
@@ -256,6 +269,7 @@ export default function IndividualDetail({
                     <div className="absolute -left-[25px] top-1 w-2.5 h-2.5 rounded-full bg-ink-light" />
                     <p className="text-[10px] font-bold text-ink-light">{new Date(individual.death_date).getFullYear()}</p>
                     <p className="text-[12px] text-ink font-bold">Wafat</p>
+                    <p className="text-[11px] text-ink-light italic">{individual.death_place ? `dimakamkan di ${individual.death_place}` : ''}</p>
                   </div>
                 )}
 

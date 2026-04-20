@@ -8,6 +8,7 @@ export interface Individual {
   birth_date?: string;
   death_date?: string;
   birth_place?: string;
+  death_place?: string;
   current_location?: string;
   education?: string;
   occupation?: string;

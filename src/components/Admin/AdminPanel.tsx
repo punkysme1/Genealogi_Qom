@@ -26,6 +26,8 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     birth_date: '',
     death_date: '',
     birth_place: '',
+    death_place: '',
+    current_location: '',
     occupation: '',
     is_verified: false,
     verified_by: '',
@@ -169,6 +171,8 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       birth_date: '',
       death_date: '',
       birth_place: '',
+      death_place: '',
+      current_location: '',
       occupation: '',
       is_verified: false,
       verified_by: '',
@@ -224,16 +228,9 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     try {
       const { id, created_at, updated_at, ...cleanData } = formData as any;
       
-      // Automatic Henry Numbering for NEW individuals
+      // Automatic Alphanumeric Numbering for NEW individuals (Temporary placeholder - will be recalculated by generator)
       if (!editingId && (!cleanData.ref_code || cleanData.ref_code === '')) {
-        const parentId = cleanData.father_id || cleanData.mother_id;
-        if (parentId) {
-          const { data: parentData } = await supabase.from('individuals').select('ref_code').eq('id', parentId).single();
-          const { count } = await supabase.from('individuals').select('*', { count: 'exact', head: true }).or(`father_id.eq.${parentId},mother_id.eq.${parentId}`);
-          cleanData.ref_code = suggestHenryCode(parentData?.ref_code, count || 0);
-        } else {
-          cleanData.ref_code = '1';
-        }
+        cleanData.ref_code = 'ID_PENDING';
       }
 
       if (cleanData.father_id === '') cleanData.father_id = null;
@@ -243,6 +240,8 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       if (cleanData.verified_by === '') cleanData.verified_by = null;
       if (cleanData.ref_code === '') cleanData.ref_code = null;
       if (cleanData.birth_place === '') cleanData.birth_place = null;
+      if (cleanData.death_place === '') cleanData.death_place = null;
+      if (cleanData.current_location === '') cleanData.current_location = null;
       if (cleanData.occupation === '') cleanData.occupation = null;
       if (cleanData.bio === '') cleanData.bio = null;
 
@@ -283,6 +282,8 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       birth_date: '',
       death_date: '',
       birth_place: '',
+      death_place: '',
+      current_location: '',
       occupation: '',
       is_verified: false,
       verified_by: '',
@@ -458,7 +459,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-ink-light mb-1.5">Kode Henry (Auto)</label>
+                    <label className="block text-xs font-bold text-ink-light mb-1.5">Kode Alfanumerik (Auto)</label>
                     <div className="px-4 py-2.5 bg-bg border border-dashed border-border-olive rounded-lg text-sm text-ink-light italic">
                       {formData.ref_code || 'Otomatis dihitung sistem'}
                     </div>
@@ -468,8 +469,9 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
 
               {/* Section: Key Facts */}
               <div className="space-y-4">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest text-primary-olive border-b border-primary-olive/20 pb-2">Key Facts</h3>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-primary-olive border-b border-primary-olive/20 pb-2 italic">Langkah 3: Detail Kejadian (Lahir & Wafat)</h3>
                 <div className="grid grid-cols-2 gap-4">
+                  {/* Lahir */}
                   <div>
                     <label className="block text-xs font-bold text-ink-light mb-1.5">Tanggal Lahir</label>
                     <input
@@ -485,7 +487,41 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                       value={formData.birth_place || ''}
                       onChange={(e) => setFormData({ ...formData, birth_place: e.target.value })}
                       className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
+                      placeholder="Kabupaten/Kota"
                     />
+                  </div>
+                  
+                  {/* Wafat */}
+                  <div>
+                    <label className="block text-xs font-bold text-ink-light mb-1.5">Tanggal Wafat (Jika ada)</label>
+                    <input
+                      type="date"
+                      value={formData.death_date || ''}
+                      onChange={(e) => setFormData({ ...formData, death_date: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-ink-light mb-1.5">Tempat Wafat / Makam</label>
+                    <input
+                      value={formData.death_place || ''}
+                      onChange={(e) => setFormData({ ...formData, death_place: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
+                      placeholder="Nama Makam/Wilayah"
+                    />
+                  </div>
+
+                  <div className="col-span-2 pt-2">
+                    <label className="block text-xs font-bold text-ink-light mb-1.5 flex items-center gap-1">
+                      <MapPin size={12} className="text-primary-olive" /> Domisili / Sebaran Wilayah Saat Ini
+                    </label>
+                    <input
+                      value={formData.current_location || ''}
+                      onChange={(e) => setFormData({ ...formData, current_location: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-surface border border-accent-tan/30 rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
+                      placeholder="Contoh: Gresik (Kosongkan jika domisili = makam)"
+                    />
+                    <p className="text-[10px] text-ink-light italic mt-1.5">* Jika sudah wafat, sebaran wilayah otomatis mengambil data 'Tempat Wafat' jika kolom ini kosong.</p>
                   </div>
                 </div>
               </div>

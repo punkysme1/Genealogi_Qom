@@ -8,7 +8,7 @@ import LoginPage from '@/components/Auth/LoginPage';
 import AdminPanel from '@/components/Admin/AdminPanel';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
-import { generateGenealogyIDs } from '@/lib/genealogy';
+import { generateGenealogyIDs, calculateGenerations } from '@/lib/genealogy';
 import { 
   Search, 
   Filter, 
@@ -173,6 +173,47 @@ export default function App() {
   };
 
   const toggleStats = () => setIsStatsOpen(!isStatsOpen);
+
+  const stats = React.useMemo(() => {
+    const locCounts: Record<string, number> = {};
+    const genCounts: Record<number, number> = {};
+    let lastUpdate: string | null = null;
+
+    if (!individuals.length) return { sortedLocs: [], sortedGens: [], lastUpdate: null };
+
+    const { levels } = calculateGenerations(individuals);
+
+    individuals.forEach(ind => {
+      // Location logic: Use current_location if exists, else death_place if deceased, else 'Tidak Diketahui'
+      const rawLoc = ind.current_location || ind.death_place;
+      const loc = rawLoc?.split(',')[0].trim() || 'Tidak Diketahui';
+      locCounts[loc] = (locCounts[loc] || 0) + 1;
+
+      // Generation
+      const level = levels[ind.id];
+      if (level !== undefined) {
+        genCounts[level] = (genCounts[level] || 0) + 1;
+      }
+
+      // Last Update
+      if (ind.updated_at) {
+        if (!lastUpdate || new Date(ind.updated_at) > new Date(lastUpdate)) {
+          lastUpdate = ind.updated_at;
+        }
+      }
+    });
+
+    const sortedLocs = Object.entries(locCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count }));
+
+    const sortedGens = Object.entries(genCounts)
+      .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+      .map(([gen, count]) => ({ gen: `Gen ${gen}`, count }));
+
+    return { sortedLocs, sortedGens, lastUpdate };
+  }, [individuals]);
 
   return (
     <ErrorBoundary>
@@ -372,17 +413,27 @@ export default function App() {
           </div>
 
           <div>
-            <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3">Sebaran Wilayah</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3">Sebaran Wilayah (Domisili)</h3>
             <div className="space-y-2">
-              {[
-                { name: 'Gresik', count: Math.floor(individuals.length * 0.3) },
-                { name: 'Tuban', count: Math.floor(individuals.length * 0.2) },
-                { name: 'Lamongan', count: Math.floor(individuals.length * 0.1) },
-                { name: 'Surabaya', count: Math.floor(individuals.length * 0.08) },
-              ].map((loc) => (
+              {stats.sortedLocs.map((loc) => (
                 <div key={loc.name} className="flex justify-between text-[12px] py-1.5 border-b border-border-olive/50 last:border-0">
                   <span className="text-ink">{loc.name}</span>
                   <span className="font-bold text-primary-olive">{loc.count}</span>
+                </div>
+              ))}
+              {stats.sortedLocs.length === 0 && (
+                <p className="text-[10px] text-ink-light italic text-center py-2">Data belum tersedia</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3">Individu per Generasi</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {stats.sortedGens.map((gen) => (
+                <div key={gen.gen} className="bg-bg/50 p-2 rounded-lg border border-border-olive/30 flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-ink-light">{gen.gen}</span>
+                  <span className="text-[12px] font-bold text-primary-olive">{gen.count}</span>
                 </div>
               ))}
             </div>
@@ -434,6 +485,19 @@ export default function App() {
               >
                 <RefreshCcw size={14} /> Refresh Data
               </button>
+            </div>
+          )}
+          {stats.lastUpdate && (
+            <div className="mt-8 pt-4 border-t border-border-olive/30">
+              <p className="text-[9px] text-ink-light uppercase tracking-tighter text-center">
+                Pembaruan Terakhir: {new Intl.DateTimeFormat('id-ID', { 
+                  day: 'numeric', 
+                  month: 'short', 
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }).format(new Date(stats.lastUpdate))}
+              </p>
             </div>
           )}
         </aside>
