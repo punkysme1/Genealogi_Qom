@@ -27,6 +27,7 @@ interface IndividualDetailProps {
   onClose: () => void;
   isAdmin?: boolean;
   onEdit?: (individual: Individual) => void;
+  onSelectIndividual?: (individual: Individual) => void;
 }
 
 export default function IndividualDetail({ 
@@ -35,7 +36,8 @@ export default function IndividualDetail({
   marriages = [], 
   onClose, 
   isAdmin, 
-  onEdit 
+  onEdit,
+  onSelectIndividual
 }: IndividualDetailProps) {
   const [events, setEvents] = useState<Event[]>([]);
 
@@ -194,20 +196,42 @@ export default function IndividualDetail({
               <div className="space-y-3 text-[12px]">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Ayah</span>
-                  <span className="font-medium text-ink">{father?.name || '-'}</span>
+                  {father ? (
+                    <button 
+                      onClick={() => onSelectIndividual?.(father)}
+                      className="text-left font-medium text-ink hover:text-primary-olive transition-colors underline decoration-border-olive/30 underline-offset-2"
+                    >
+                      {father.name}
+                    </button>
+                  ) : (
+                    <span className="font-medium text-ink opacity-40">-</span>
+                  )}
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Ibu</span>
-                  <span className="font-medium text-ink">{mother?.name || '-'}</span>
+                  {mother ? (
+                    <button 
+                      onClick={() => onSelectIndividual?.(mother)}
+                      className="text-left font-medium text-ink hover:text-primary-olive transition-colors underline decoration-border-olive/30 underline-offset-2"
+                    >
+                      {mother.name}
+                    </button>
+                  ) : (
+                    <span className="font-medium text-ink opacity-40">-</span>
+                  )}
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Pasangan</span>
                   <div className="flex flex-col gap-1">
                     {spouses.length > 0 ? spouses.map(s => (
-                      <span key={s?.id} className="font-medium text-ink italic leading-tight">
+                      <button 
+                        key={s?.id} 
+                        onClick={() => s && onSelectIndividual?.(s)}
+                        className="text-left font-medium text-ink italic leading-tight hover:text-primary-olive transition-colors underline decoration-border-olive/30 underline-offset-2"
+                      >
                         {s?.name}
-                      </span>
-                    )) : <span className="font-medium text-ink">-</span>}
+                      </button>
+                    )) : <span className="font-medium text-ink opacity-40">-</span>}
                   </div>
                 </div>
                 {/* ID section already added above, but we keep the children list as it's vital information. 
@@ -217,11 +241,17 @@ export default function IndividualDetail({
                   <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Keturunan ({children.length})</span>
                   <div className="max-h-32 overflow-y-auto space-y-1 pr-2 mt-1">
                     {children.length > 0 ? children.map(c => (
-                      <div key={c.id} className="flex items-center gap-2 group">
+                      <button 
+                        key={c.id} 
+                        onClick={() => onSelectIndividual?.(c)}
+                        className="w-full flex items-center gap-2 group text-left"
+                      >
                         <div className={`w-1.5 h-1.5 rounded-full ${c.gender === 'M' ? 'bg-blue-400' : 'bg-rose-400'}`} />
-                        <span className="text-ink font-medium leading-tight group-hover:text-primary-olive cursor-default transition-colors">{c.name}</span>
-                      </div>
-                    )) : <span className="text-ink-light italic">Belum ada data</span>}
+                        <span className="text-ink font-medium leading-tight group-hover:text-primary-olive transition-colors">
+                          {c.name}
+                        </span>
+                      </button>
+                    )) : <span className="text-ink-light italic text-[11px]">Belum ada data</span>}
                   </div>
                 </div>
               </div>

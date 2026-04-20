@@ -28,9 +28,10 @@ interface FamilyTreeProps {
   marriages: Marriage[];
   onSelectIndividual: (individual: Individual) => void;
   searchQuery?: string;
+  selectedIndividualId?: string | null;
 }
 
-function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQuery }: FamilyTreeProps) {
+function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQuery, selectedIndividualId }: FamilyTreeProps) {
   console.log('FamilyTreeContent rendering with', individuals.length, 'individuals');
   const { fitView, setCenter } = useReactFlow();
 
@@ -146,15 +147,18 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         if (unit.length === 2) {
           // Couple
           unit.forEach((id, idx) => {
-            const ind = indMap.get(id)!;
-            const isHighlighted = searchQuery && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
+            const ind = indMap.get(id);
+            if (!ind) return;
+            const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
             const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+            const isSelected = selectedIndividualId === ind.id;
             nodes.push({
               id: ind.id,
               type: 'individual',
               data: { 
                 individual: { ...ind, ref_code: displayId }, 
-                isHighlighted 
+                isHighlighted,
+                isSelected
               },
               position: { 
                 x: currentX + (idx * (NODE_WIDTH + SPOUSE_GAP)), 
@@ -163,17 +167,20 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
             });
           });
           currentX += (2 * NODE_WIDTH) + SPOUSE_GAP + HORIZONTAL_GAP;
-        } else {
+        } else if (unit.length === 1) {
           // Single
-          const ind = indMap.get(unit[0])!;
-          const isHighlighted = searchQuery && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
+          const ind = indMap.get(unit[0]);
+          if (!ind) return;
+          const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
           const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+          const isSelected = selectedIndividualId === ind.id;
           nodes.push({
             id: ind.id,
             type: 'individual',
             data: { 
               individual: { ...ind, ref_code: displayId }, 
-              isHighlighted 
+              isHighlighted,
+              isSelected
             },
             position: { x: currentX, y: level * VERTICAL_GAP },
           });
@@ -219,7 +226,7 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     });
 
     return { initialNodes: nodes, initialEdges: edges };
-  }, [individuals, marriages, searchQuery]);
+  }, [individuals, marriages, searchQuery, selectedIndividualId]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -228,8 +235,16 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     setNodes(initialNodes);
     setEdges(initialEdges);
     
-    // Default focus on initial load or search match
+    // Focus logic
     const timer = setTimeout(() => {
+      if (selectedIndividualId) {
+        const selectedNode = initialNodes.find(n => n.id === selectedIndividualId);
+        if (selectedNode) {
+          setCenter(selectedNode.position.x + 120, selectedNode.position.y + 60, { zoom: 1, duration: 800 });
+          return;
+        }
+      }
+
       if (searchQuery && searchQuery.length > 2) {
         // Find matching node
         const matchingNode = initialNodes.find(n => 
@@ -256,7 +271,7 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       }
     }, 150);
     return () => clearTimeout(timer);
-  }, [initialNodes, initialEdges, searchQuery, setNodes, setEdges, fitView, setCenter]);
+  }, [initialNodes, initialEdges, searchQuery, selectedIndividualId, setNodes, setEdges, fitView, setCenter]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),

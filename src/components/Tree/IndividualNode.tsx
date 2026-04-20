@@ -26,8 +26,8 @@ export default function IndividualNode({ data }: IndividualNodeProps) {
         individual.gender === 'M' 
           ? 'bg-blue-50/30 border-blue-200/50' 
           : 'bg-rose-50/30 border-rose-200/50',
-        isSelected ? 'border-primary-olive border-2 shadow-md bg-white' : '',
-        isHighlighted && 'ring-8 ring-primary-olive/30 border-primary-olive shadow-2xl scale-110 z-10'
+        isSelected ? 'border-primary-olive border-2 shadow-xl bg-white ring-4 ring-primary-olive/20 z-20 scale-105' : '',
+        isHighlighted && !isSelected && 'ring-8 ring-primary-olive/30 border-primary-olive shadow-2xl scale-110 z-10'
       )}
     >
       <Handle type="target" position={Position.Top} className="w-2 h-2 !bg-accent-tan border-none" />

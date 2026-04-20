@@ -509,6 +509,7 @@ export default function App() {
             marriages={marriages}
             onSelectIndividual={setSelectedIndividual}
             searchQuery={searchQuery}
+            selectedIndividualId={selectedIndividual?.id}
           />
 
           {/* Legend - Responsive hide */}
@@ -543,6 +544,7 @@ export default function App() {
         onClose={() => setSelectedIndividual(null)}
         isAdmin={!!user}
         onEdit={handleEditIndividual}
+        onSelectIndividual={setSelectedIndividual}
       />
 
       {/* Modals */}
