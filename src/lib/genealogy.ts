@@ -158,14 +158,28 @@ export function generateGenealogyIDs(individual: Individual | null, allIndividua
   // IF alphaPaths is empty, check if this is an in-law (spouse of someone with an ID)
   if (alphaPaths.length === 0 && !individual.name?.includes('Qomaruddin')) {
     const spouseMarriages = marriages.filter(m => m.husband_id === individual.id || m.wife_id === individual.id);
+    
     for (const m of spouseMarriages) {
       const spouseId = m.husband_id === individual.id ? m.wife_id : m.husband_id;
       if (spouseId) {
         const spousePaths = calculatePathIDs(spouseId, allIndividuals) || [];
         if (spousePaths.length > 0) {
-          // Add spouse's path with a + suffix
+          // Determine marriage rank for this spouse
+          const allSpouseMarriages = marriages
+            .filter(sm => sm.husband_id === spouseId || sm.wife_id === spouseId)
+            .sort((a, b) => {
+              const dateA = a.marriage_date || a.created_at || '9999-12-31';
+              const dateB = b.marriage_date || b.created_at || '9999-12-31';
+              return dateA.localeCompare(dateB);
+            });
+          
+          const marriageIndex = allSpouseMarriages.findIndex(sm => sm.id === m.id);
+          const plusCount = marriageIndex !== -1 ? marriageIndex + 1 : 1;
+          const plusSuffix = '+'.repeat(plusCount);
+
+          // Add spouse's path with the appropriate number of + suffixes
           spousePaths.forEach(p => {
-            alphaPaths.push(`${p}+`);
+            alphaPaths.push(`${p}${plusSuffix}`);
           });
         }
       }

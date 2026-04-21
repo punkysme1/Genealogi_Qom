@@ -79,11 +79,11 @@ export default function IndividualDetail({
   const father = individuals.find(i => i?.id === individual.father_id);
   const mother = individuals.find(i => i?.id === individual.mother_id);
   const spouseMarriages = marriages.filter(m => m?.husband_id === individual.id || m?.wife_id === individual.id);
-  const uniqueSpouseIds = Array.from(new Set(spouseMarriages.map(m => 
-    m?.husband_id === individual.id ? m?.wife_id : m?.husband_id
-  ).filter(Boolean)));
-  
-  const spouses = uniqueSpouseIds.map(id => individuals.find(i => i?.id === id)).filter(Boolean);
+  const spousesWithMarriage = spouseMarriages.map(m => {
+    const spouseId = m?.husband_id === individual.id ? m?.wife_id : m?.husband_id;
+    const spouse = individuals.find(i => i?.id === spouseId);
+    return { spouse, marriage: m };
+  }).filter(item => !!item.spouse);
 
   const children = individuals
     .filter(child => child?.father_id === individual.id || child?.mother_id === individual.id)
@@ -146,7 +146,9 @@ export default function IndividualDetail({
                     <li>• <span className="text-white font-bold">1-9</span> = Anak ke-1 s/d 9</li>
                     <li>• <span className="text-white font-bold">A-Z</span> = Anak ke-10 s/d 35</li>
                     <li>• <span className="text-white font-bold">(n)</span> = Anak ke-36+ (kembali ke angka)</li>
-                    <li className="pt-1 italic opacity-60 text-[9px]">Contoh: 2(40) (Anak ke-2 → Anak ke-40)</li>
+                    <li>• <span className="text-white font-bold">+</span> = Pasangan (Menantu)</li>
+                    <li className="pt-1 italic opacity-60 text-[9px]">Contoh: 2(40)+ (Istri pertama dari anak k-40)</li>
+                    <li className="italic opacity-60 text-[9px]">Note: ++ untuk istri ke-2, dst.</li>
                   </ul>
                 </div>
               </div>
@@ -232,14 +234,20 @@ export default function IndividualDetail({
                 <div className="flex flex-col gap-0.5">
                   <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Pasangan</span>
                   <div className="flex flex-col gap-1">
-                    {spouses.length > 0 ? spouses.map(s => (
-                      <button 
-                        key={s?.id} 
-                        onClick={() => s && onSelectIndividual?.(s)}
-                        className="text-left font-medium text-ink italic leading-tight hover:text-primary-olive transition-colors underline decoration-border-olive/30 underline-offset-2"
-                      >
-                        {s?.name}
-                      </button>
+                    {spousesWithMarriage.length > 0 ? spousesWithMarriage.map(({ spouse, marriage }) => (
+                      <div key={spouse?.id} className="flex flex-col">
+                        <button 
+                          onClick={() => spouse && onSelectIndividual?.(spouse)}
+                          className="text-left font-medium text-ink italic leading-tight hover:text-primary-olive transition-colors underline decoration-border-olive/30 underline-offset-2"
+                        >
+                          {spouse?.name}
+                        </button>
+                        {marriage.marriage_date && (
+                          <span className="text-[10px] text-ink-light italic">
+                            Menikah: {new Date(marriage.marriage_date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
                     )) : <span className="font-medium text-ink opacity-40">-</span>}
                   </div>
                 </div>

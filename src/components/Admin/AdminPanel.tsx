@@ -38,6 +38,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   const [editingId, setEditingId] = useState<string | null>(initialSelected?.id || null);
   const [marriages, setMarriages] = useState<any[]>([]);
   const [newSpouseId, setNewSpouseId] = useState('');
+  const [newMarriageDate, setNewMarriageDate] = useState('');
   const [individualEvents, setIndividualEvents] = useState<any[]>([]);
   const [newEvent, setNewEvent] = useState({
     description: '',
@@ -145,6 +146,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       const marriageData = {
         husband_id: isMale ? editingId : newSpouseId,
         wife_id: isMale ? newSpouseId : editingId,
+        marriage_date: newMarriageDate || null,
         is_active: true
       };
       
@@ -153,6 +155,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       
       fetchMarriages(editingId);
       setNewSpouseId('');
+      setNewMarriageDate('');
       fetchAllIndividuals(); // Refresh list to see new connections
       onRefresh();
     } catch (err: any) {
@@ -561,6 +564,9 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                           <div key={m.id} className="flex items-center justify-between p-2 bg-bg rounded-lg border border-border-olive/50">
                             <div className="flex flex-col">
                               <span className="text-[13px] font-medium text-ink italic leading-tight">Menikah dengan: {spouseName}</span>
+                              {m.marriage_date && (
+                                <span className="text-[10px] text-primary-olive font-bold mt-0.5">Tgl Menikah: {new Date(m.marriage_date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                              )}
                               <button 
                                 type="button"
                                 onClick={() => handleQuickAddChild(spouseId)}
@@ -583,27 +589,36 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                         <p className="text-xs text-ink-light italic text-center py-2">Belum ada data pernikahan tercatat.</p>
                       )}
                     </div>
-                    <div className="p-4 bg-bg border-t border-border-olive flex gap-2">
-                      <select 
-                        value={newSpouseId}
-                        onChange={(e) => setNewSpouseId(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-white border border-border-olive rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-olive"
-                      >
-                        <option value="">-- Tambah Pasangan Baru --</option>
-                        {allIndividuals
-                          .filter(i => i.gender !== formData.gender && i.id !== editingId)
-                          .map(i => (
-                            <option key={i.id} value={i.id}>{i.name}</option>
-                          ))
-                        }
-                      </select>
-                      <button 
-                        type="button"
-                        onClick={handleAddMarriage}
-                        className="px-4 py-2 bg-primary-olive text-white rounded-lg text-xs font-bold hover:bg-primary-olive/90 transition-all"
-                      >
-                        Tambah
-                      </button>
+                    <div className="p-4 bg-bg border-t border-border-olive space-y-2">
+                      <div className="flex gap-2">
+                        <select 
+                          value={newSpouseId}
+                          onChange={(e) => setNewSpouseId(e.target.value)}
+                          className="flex-1 px-3 py-2 bg-white border border-border-olive rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-olive"
+                        >
+                          <option value="">-- Tambah Pasangan Baru --</option>
+                          {allIndividuals
+                            .filter(i => i.gender !== formData.gender && i.id !== editingId)
+                            .map(i => (
+                              <option key={i.id} value={i.id}>{i.name}</option>
+                            ))
+                          }
+                        </select>
+                        <input 
+                          type="date"
+                          value={newMarriageDate}
+                          onChange={(e) => setNewMarriageDate(e.target.value)}
+                          className="w-32 px-3 py-2 bg-white border border-border-olive rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-olive"
+                          title="Tanggal Pernikahan"
+                        />
+                        <button 
+                          type="button"
+                          onClick={handleAddMarriage}
+                          className="px-4 py-2 bg-primary-olive text-white rounded-lg text-xs font-bold hover:bg-primary-olive/90 transition-all font-sans"
+                        >
+                          Tambah
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
