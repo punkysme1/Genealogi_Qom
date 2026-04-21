@@ -13,11 +13,12 @@ interface IndividualNodeProps {
     individual: Individual;
     isSelected?: boolean;
     isHighlighted?: boolean;
+    isInLineage?: boolean;
   };
 }
 
 export default function IndividualNode({ data }: IndividualNodeProps) {
-  const { individual, isSelected, isHighlighted } = data;
+  const { individual, isSelected, isHighlighted, isInLineage } = data;
 
   return (
     <div
@@ -26,6 +27,7 @@ export default function IndividualNode({ data }: IndividualNodeProps) {
         individual.gender === 'M' 
           ? 'bg-blue-50/30 border-blue-200/50' 
           : 'bg-rose-50/30 border-rose-200/50',
+        isInLineage && !isSelected && 'border-emerald-500/80 bg-emerald-50/20 shadow-md ring-2 ring-emerald-500/10',
         isSelected ? 'border-primary-olive border-2 shadow-xl bg-white ring-4 ring-primary-olive/20 z-20 scale-105' : '',
         isHighlighted && !isSelected && 'ring-8 ring-primary-olive/30 border-primary-olive shadow-2xl scale-110 z-10'
       )}

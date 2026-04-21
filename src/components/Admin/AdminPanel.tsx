@@ -53,7 +53,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
 
   const fetchAllIndividuals = async () => {
     const { data } = await supabase.from('individuals').select('*').order('name');
-    if (data) setAllIndividuals(data);
+    if (data) {
+      const uniqueData = Array.from(new Map(data.map(i => [i.id, i])).values());
+      setAllIndividuals(uniqueData);
+    }
   };
 
   const fetchEvents = async (id: string) => {

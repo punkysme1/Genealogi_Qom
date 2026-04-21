@@ -95,6 +95,43 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     const VERTICAL_GAP = 400; 
     const SPOUSE_GAP = 40; // Smaller gap for spouses
 
+    // 4. Highlight Logic
+    const highlightedNodeIds = new Set<string>();
+    const highlightedEdgeIds = new Set<string>();
+
+    if (selectedIndividualId) {
+      highlightedNodeIds.add(selectedIndividualId);
+      
+      // Ancestors
+      const findAncestors = (id: string) => {
+        const ind = indMap.get(id);
+        if (!ind) return;
+        if (ind.father_id && indMap.has(ind.father_id)) {
+          highlightedNodeIds.add(ind.father_id);
+          highlightedEdgeIds.add(`e-f-${ind.father_id}-${id}`);
+          findAncestors(ind.father_id);
+        }
+        if (ind.mother_id && indMap.has(ind.mother_id)) {
+          highlightedNodeIds.add(ind.mother_id);
+          highlightedEdgeIds.add(`e-m-${ind.mother_id}-${id}`);
+          findAncestors(ind.mother_id);
+        }
+      };
+      findAncestors(selectedIndividualId);
+
+      // Descendants
+      const findDescendants = (id: string) => {
+        individuals.forEach(ind => {
+          if (ind.father_id === id || ind.mother_id === id) {
+            highlightedNodeIds.add(ind.id);
+            highlightedEdgeIds.add(ind.father_id === id ? `e-f-${id}-${ind.id}` : `e-m-${id}-${ind.id}`);
+            findDescendants(ind.id);
+          }
+        });
+      };
+      findDescendants(selectedIndividualId);
+    }
+
     Object.keys(groups).sort((a, b) => Number(a) - Number(b)).forEach(levelStr => {
       const level = Number(levelStr);
       const levelIds = groups[level];
@@ -164,13 +201,16 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
             const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
             const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
             const isSelected = selectedIndividualId === ind.id;
+            const isInLineage = highlightedNodeIds.has(ind.id);
+
             nodes.push({
               id: ind.id,
               type: 'individual',
               data: { 
                 individual: { ...ind, ref_code: displayId }, 
                 isHighlighted,
-                isSelected
+                isSelected,
+                isInLineage
               },
               position: { 
                 x: currentX + (idx * (NODE_WIDTH + SPOUSE_GAP)), 
@@ -186,13 +226,16 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
           const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
           const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
           const isSelected = selectedIndividualId === ind.id;
+          const isInLineage = highlightedNodeIds.has(ind.id);
+
           nodes.push({
             id: ind.id,
             type: 'individual',
             data: { 
               individual: { ...ind, ref_code: displayId }, 
               isHighlighted,
-              isSelected
+              isSelected,
+              isInLineage
             },
             position: { x: currentX, y: level * VERTICAL_GAP },
           });
@@ -201,23 +244,35 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       });
     });
 
-    // 4. Edges
+    // 5. Edges
     // Parent-Child edges
     individuals.forEach((ind) => {
       if (ind.father_id && indMap.has(ind.father_id)) {
+        const edgeId = `e-f-${ind.father_id}-${ind.id}`;
+        const isLineage = highlightedEdgeIds.has(edgeId);
         edges.push({
-          id: `e-f-${ind.father_id}-${ind.id}`,
+          id: edgeId,
           source: ind.father_id,
           target: ind.id,
-          style: { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+          style: isLineage 
+            ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
+            : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+          animated: isLineage,
+          zIndex: isLineage ? 10 : 1,
         });
       }
       if (ind.mother_id && indMap.has(ind.mother_id)) {
+        const edgeId = `e-m-${ind.mother_id}-${ind.id}`;
+        const isLineage = highlightedEdgeIds.has(edgeId);
         edges.push({
-          id: `e-m-${ind.mother_id}-${ind.id}`,
+          id: edgeId,
           source: ind.mother_id,
           target: ind.id,
-          style: { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+          style: isLineage 
+            ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
+            : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+          animated: isLineage,
+          zIndex: isLineage ? 10 : 1,
         });
       }
     });
@@ -225,14 +280,21 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     // Marriage edges
     marriages.forEach((m) => {
       if (indMap.has(m.husband_id) && indMap.has(m.wife_id)) {
+        const isInLineage = highlightedNodeIds.has(m.husband_id) && highlightedNodeIds.has(m.wife_id);
         edges.push({
           id: `e-mrg-${m.id}`,
           source: m.husband_id,
           target: m.wife_id,
           label: '∞',
-          labelStyle: { fill: '#E2725B', fontWeight: 700, fontSize: 16 },
-          style: { stroke: '#E2725B', strokeWidth: 3, strokeDasharray: '8,4', opacity: 0.8 },
+          labelStyle: { fill: isInLineage ? '#10b981' : '#E2725B', fontWeight: 700, fontSize: 16 },
+          style: { 
+            stroke: isInLineage ? '#10b981' : '#E2725B', 
+            strokeWidth: isInLineage ? 4 : 3, 
+            strokeDasharray: '8,4', 
+            opacity: isInLineage ? 1 : 0.8 
+          },
           animated: false,
+          zIndex: isInLineage ? 10 : 1,
         });
       }
     });
