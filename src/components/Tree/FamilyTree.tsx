@@ -103,20 +103,32 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       const usedIds = new Set<string>();
       const layoutUnits: string[][] = [];
 
-      // Sort individuals by their parent's average X position if parents exist
-      // This keeps branches clustered below their parents
+      // Sort individuals by their parent's birth date group, then by their own birth date
+      // We reverse the logic to achieve a right-to-left feel (Oldest on the right)
       levelIds.sort((a, b) => {
         const indA = indMap.get(a)!;
         const indB = indMap.get(b)!;
         
-        // Find parents
         const pA = indA.father_id || indA.mother_id;
         const pB = indB.father_id || indB.mother_id;
         
-        if (pA && pB) return pA.localeCompare(pB);
-        if (pA) return -1;
-        if (pB) return 1;
-        return indA.name.localeCompare(indB.name);
+        // Use the generated nasab IDs for much more reliable sorting (respecting birth order)
+        // We pre-calculate or calculate on-the-fly; for a single level it's manageable.
+        try {
+          const { displayId: idA } = generateGenealogyIDs(indA, individuals, marriages);
+          const { displayId: idB } = generateGenealogyIDs(indB, individuals, marriages);
+          
+          // If they have the same parent, or same prefix, sort by ID descending (R-to-L)
+          // This ensures that '1' (Oldest) is on the right of '2', '3', etc.
+          if (idA !== idB) {
+            return idB.localeCompare(idA);
+          }
+        } catch (e) {
+          // Fallback to name if ID generation fails
+          return indB.name.localeCompare(indA.name);
+        }
+
+        return 0;
       });
 
       levelIds.forEach(id => {
@@ -126,12 +138,12 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         if (m) {
           const spouseId = m.husband_id === id ? m.wife_id : m.husband_id;
           if (spouseId && indMap.has(spouseId) && levels[spouseId] === level) {
-            // Husband always first for consistent layout
-            const husband = indMap.get(m.husband_id)!;
-            const wife = indMap.get(m.wife_id)!;
-            layoutUnits.push([husband.id, wife.id]);
-            usedIds.add(husband.id);
-            usedIds.add(wife.id);
+            // For right-to-left look, place spouse on the left and blood descendant on the right
+            const bloodDescendant = indMap.get(id)!;
+            const spouse = indMap.get(spouseId)!;
+            layoutUnits.push([spouse.id, bloodDescendant.id]);
+            usedIds.add(bloodDescendant.id);
+            usedIds.add(spouse.id);
             return;
           }
         }

@@ -153,7 +153,25 @@ export function generateGenealogyIDs(individual: Individual | null, allIndividua
   const baseId = level !== undefined ? `G${level}.${rank}` : 'Outer';
   
   // Alphanumeric paths for Display-ID logic
-  const alphaPaths = calculatePathIDs(individual.id, allIndividuals) || [];
+  let alphaPaths = calculatePathIDs(individual.id, allIndividuals) || [];
+  
+  // IF alphaPaths is empty, check if this is an in-law (spouse of someone with an ID)
+  if (alphaPaths.length === 0 && !individual.name?.includes('Qomaruddin')) {
+    const spouseMarriages = marriages.filter(m => m.husband_id === individual.id || m.wife_id === individual.id);
+    for (const m of spouseMarriages) {
+      const spouseId = m.husband_id === individual.id ? m.wife_id : m.husband_id;
+      if (spouseId) {
+        const spousePaths = calculatePathIDs(spouseId, allIndividuals) || [];
+        if (spousePaths.length > 0) {
+          // Add spouse's path with a + suffix
+          spousePaths.forEach(p => {
+            alphaPaths.push(`${p}+`);
+          });
+        }
+      }
+    }
+  }
+
   const sortedAlpha = [...alphaPaths].sort((a, b) => a.length - b.length || a.localeCompare(b));
   
   // Display-ID: Shortest Alphanumeric

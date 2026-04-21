@@ -99,7 +99,8 @@ export default function App() {
       
       if (indError) throw indError;
       if (indData) {
-        setIndividuals(indData);
+        const uniqueInds = Array.from(new Map(indData.map(i => [i.id, i])).values());
+        setIndividuals(uniqueInds);
       }
 
       // Fetch Marriages

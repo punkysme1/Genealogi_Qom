@@ -79,12 +79,21 @@ export default function IndividualDetail({
   const father = individuals.find(i => i?.id === individual.father_id);
   const mother = individuals.find(i => i?.id === individual.mother_id);
   const spouseMarriages = marriages.filter(m => m?.husband_id === individual.id || m?.wife_id === individual.id);
-  const spouses = spouseMarriages.map(m => {
-    const spouseId = m?.husband_id === individual.id ? m?.wife_id : m?.husband_id;
-    return individuals.find(i => i?.id === spouseId);
-  }).filter(Boolean);
+  const uniqueSpouseIds = Array.from(new Set(spouseMarriages.map(m => 
+    m?.husband_id === individual.id ? m?.wife_id : m?.husband_id
+  ).filter(Boolean)));
+  
+  const spouses = uniqueSpouseIds.map(id => individuals.find(i => i?.id === id)).filter(Boolean);
 
-  const children = individuals.filter(child => child?.father_id === individual.id || child?.mother_id === individual.id);
+  const children = individuals
+    .filter(child => child?.father_id === individual.id || child?.mother_id === individual.id)
+    .sort((a, b) => {
+      const dateA = a?.birth_date || '9999-12-31';
+      const dateB = b?.birth_date || '9999-12-31';
+      const nameA = a?.name || '';
+      const nameB = b?.name || '';
+      return dateA.localeCompare(dateB) || nameA.localeCompare(nameB);
+    });
 
   return (
     <AnimatePresence>
