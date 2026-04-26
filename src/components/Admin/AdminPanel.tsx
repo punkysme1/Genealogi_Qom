@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Individual, Event } from '@/types';
+import { Individual, Event, Marriage } from '@/types';
 import { supabase } from '@/lib/supabase';
-import { suggestHenryCode, findSpouse } from '@/lib/genealogy';
+import { suggestHenryCode, findSpouse, generateGenealogyIDs } from '@/lib/genealogy';
 import { X, Save, Trash2, UserPlus, ShieldCheck, AlertCircle, Search, ChevronRight, ArrowLeft, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -17,6 +17,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [allIndividuals, setAllIndividuals] = useState<Individual[]>([]);
+  const [allMarriages, setAllMarriages] = useState<Marriage[]>([]);
   const [searchListQuery, setSearchListQuery] = useState('');
   
   const [formData, setFormData] = useState<Partial<Individual>>({
@@ -49,6 +50,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
 
   useEffect(() => {
     fetchAllIndividuals();
+    fetchAllMarriages();
   }, []);
 
   const fetchAllIndividuals = async () => {
@@ -57,6 +59,11 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       const uniqueData = Array.from(new Map(data.map(i => [i.id, i])).values());
       setAllIndividuals(uniqueData);
     }
+  };
+
+  const fetchAllMarriages = async () => {
+    const { data } = await supabase.from('marriages').select('*');
+    if (data) setAllMarriages(data);
   };
 
   const fetchEvents = async (id: string) => {
@@ -376,7 +383,14 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                     </div>
                     <div>
                       <p className="text-sm font-bold text-ink">{ind.name}</p>
-                      <p className="text-[10px] font-mono text-ink-light uppercase">{ind.ref_code || 'No Code'}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[9px] font-mono font-bold bg-primary-olive/10 text-primary-olive px-1 rounded border border-primary-olive/20 uppercase">
+                          {generateGenealogyIDs(ind, allIndividuals, allMarriages).displayId || 'ID_PENDING'}
+                        </span>
+                        <span className="text-[9px] font-mono text-ink-light uppercase">
+                          {generateGenealogyIDs(ind, allIndividuals, allMarriages).baseId}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <ChevronRight size={16} className="text-border-olive group-hover:text-primary-olive transition-colors" />

@@ -87,6 +87,8 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [selectedGen, setSelectedGen] = useState<number | null>(null);
+  const [verificationFilter, setVerificationFilter] = useState<'all' | 'verified' | 'unverified'>('all');
   const [searchResults, setSearchResults] = useState<Individual[]>([]);
 
   const fetchData = async () => {
@@ -179,13 +181,19 @@ export default function App() {
     const locCounts: Record<string, number> = {};
     const genCounts: Record<number, number> = {};
     let lastUpdate: string | null = null;
+    let verifiedCount = 0;
+    let unverifiedCount = 0;
 
-    if (!individuals.length) return { sortedLocs: [], sortedGens: [], lastUpdate: null };
+    if (!individuals.length) return { sortedLocs: [], sortedGens: [], lastUpdate: null, verifiedCount: 0, unverifiedCount: 0 };
 
     const { levels } = calculateGenerations(individuals);
 
     individuals.forEach(ind => {
-      // Location logic: Use current_location if exists, else death_place if deceased, else 'Tidak Diketahui'
+      // Verified status
+      if (ind.is_verified) verifiedCount++;
+      else unverifiedCount++;
+
+      // Location logic
       const rawLoc = ind.current_location || ind.death_place;
       const loc = rawLoc?.split(',')[0].trim() || 'Tidak Diketahui';
       locCounts[loc] = (locCounts[loc] || 0) + 1;
@@ -211,10 +219,24 @@ export default function App() {
 
     const sortedGens = Object.entries(genCounts)
       .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
-      .map(([gen, count]) => ({ gen: `Gen ${gen}`, count }));
+      .map(([gen, count]) => ({ gen: parseInt(gen), label: `Gen ${gen}`, count }));
 
-    return { sortedLocs, sortedGens, lastUpdate };
+    return { sortedLocs, sortedGens, lastUpdate, verifiedCount, unverifiedCount };
   }, [individuals]);
+
+  const filteredIndividualsByGen = React.useMemo(() => {
+    if (selectedGen === null) return [];
+    const { levels } = calculateGenerations(individuals);
+    let filtered = individuals.filter(ind => levels[ind.id] === selectedGen);
+    
+    if (verificationFilter === 'verified') {
+      filtered = filtered.filter(ind => ind.is_verified);
+    } else if (verificationFilter === 'unverified') {
+      filtered = filtered.filter(ind => !ind.is_verified);
+    }
+    
+    return filtered;
+  }, [individuals, selectedGen, verificationFilter]);
 
   return (
     <ErrorBoundary>
@@ -430,13 +452,63 @@ export default function App() {
 
           <div>
             <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3">Individu per Generasi</h3>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 mb-4">
               {stats.sortedGens.map((gen) => (
-                <div key={gen.gen} className="bg-bg/50 p-2 rounded-lg border border-border-olive/30 flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-ink-light">{gen.gen}</span>
-                  <span className="text-[12px] font-bold text-primary-olive">{gen.count}</span>
-                </div>
+                <button 
+                  key={gen.gen} 
+                  onClick={() => setSelectedGen(selectedGen === gen.gen ? null : gen.gen)}
+                  className={cn(
+                    "p-2 rounded-lg border transition-all flex justify-between items-center",
+                    selectedGen === gen.gen ? "bg-primary-olive text-white border-primary-olive shadow-md" : "bg-bg/50 border-border-olive/30 hover:border-primary-olive/50"
+                  )}
+                >
+                  <span className={cn("text-[10px] font-bold", selectedGen === gen.gen ? "text-white" : "text-ink-light")}>{gen.label}</span>
+                  <span className={cn("text-[12px] font-bold", selectedGen === gen.gen ? "text-white" : "text-primary-olive")}>{gen.count}</span>
+                </button>
               ))}
+            </div>
+
+            {selectedGen !== null && (
+              <div className="bg-bg p-3 rounded-lg border border-primary-olive/20 mb-4 animate-in slide-in-from-top-2">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-[10px] font-bold uppercase text-primary-olive">Daftar Gen {selectedGen}</h4>
+                  <button onClick={() => setSelectedGen(null)} className="text-[9px] text-ink-light hover:text-rose-500">Tutup</button>
+                </div>
+                <div className="max-h-32 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                  {filteredIndividualsByGen.map(ind => (
+                    <button 
+                      key={ind.id} 
+                      onClick={() => { setSelectedIndividual(ind); if (window.innerWidth < 1024) setIsStatsOpen(false); }}
+                      className="w-full text-left p-1.5 hover:bg-white rounded text-[11px] text-ink truncate"
+                    >
+                      {ind.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                onClick={() => setVerificationFilter(verificationFilter === 'verified' ? 'all' : 'verified')}
+                className={cn(
+                  "p-2 rounded-lg border transition-all flex flex-col items-center gap-1",
+                  verificationFilter === 'verified' ? "bg-verified-green/10 border-verified-green ring-1 ring-verified-green" : "bg-bg/30 border-border-olive/20"
+                )}
+              >
+                <span className="text-[14px] font-bold text-verified-green">{stats.verifiedCount}</span>
+                <span className="text-[8px] uppercase tracking-tighter font-bold text-ink-light">Terverifikasi</span>
+              </button>
+              <button 
+                onClick={() => setVerificationFilter(verificationFilter === 'unverified' ? 'all' : 'unverified')}
+                className={cn(
+                  "p-2 rounded-lg border transition-all flex flex-col items-center gap-1",
+                  verificationFilter === 'unverified' ? "bg-rose-50 border-rose-200 ring-1 ring-rose-200" : "bg-bg/30 border-border-olive/20"
+                )}
+              >
+                <span className="text-[14px] font-bold text-rose-500">{stats.unverifiedCount}</span>
+                <span className="text-[8px] uppercase tracking-tighter font-bold text-ink-light">Belum Verif</span>
+              </button>
             </div>
           </div>
 

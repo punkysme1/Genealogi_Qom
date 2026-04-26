@@ -27,6 +27,17 @@ function toAlphaNumeric(index: number): string {
   return `(${index})`; // Fallback for more than 35 siblings
 }
 
+function findRoot(allIndividuals: Individual[]) {
+  const sortedForRoot = [...allIndividuals].sort((a, b) => {
+    const hasParentsA = a.father_id || a.mother_id ? 1 : 0;
+    const hasParentsB = b.father_id || b.mother_id ? 1 : 0;
+    if (hasParentsA !== hasParentsB) return hasParentsA - hasParentsB;
+    // Seniority by creation date as fallback for root
+    return (a.created_at || '').localeCompare(b.created_at || '');
+  });
+  return sortedForRoot.find(i => i && i.name && i.name.includes('Qomaruddin'));
+}
+
 /**
  * Calculates generation levels and global ranks for all individuals.
  * Generation G0 = Kiai Qomaruddin.
@@ -35,7 +46,7 @@ export function calculateGenerations(allIndividuals: Individual[]) {
   const levels: Record<string, number> = {};
   if (!allIndividuals || !Array.isArray(allIndividuals)) return { levels, ranks: {} as Record<string, number> };
 
-  const root = allIndividuals.find(i => i && i.name && i.name.includes('Qomaruddin'));
+  const root = findRoot(allIndividuals);
   
   if (!root) return { levels, ranks: {} as Record<string, number> };
 
@@ -95,7 +106,7 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
   if (!individualId || !allIndividuals || !Array.isArray(allIndividuals)) return [];
   
   const paths: string[] = [];
-  const root = allIndividuals.find(i => i && i.name && i.name.includes('Qomaruddin'));
+  const root = findRoot(allIndividuals);
   if (!root) return [];
   
   const indMap = new Map(allIndividuals.filter(i => i && i.id).map(i => [i.id, i]));
