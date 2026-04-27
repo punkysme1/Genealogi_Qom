@@ -256,10 +256,18 @@ export default function App() {
           >
             <BarChart3 size={20} />
           </button>
-          <div className="bg-primary-olive w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center text-white font-serif font-bold text-sm md:text-base">
-            Q
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center overflow-hidden bg-white border border-border-olive/20 shadow-sm">
+            <img 
+              src="https://drive.google.com/thumbnail?id=1fef9BVeWH_dsPNtk4udPh-MpivNcUiRJ&sz=w100" 
+              alt="Logo Qomaruddin" 
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.parentElement!.innerHTML = '<span class="text-primary-olive font-serif font-black text-lg">Q</span>';
+              }}
+            />
           </div>
-          <h1 className="text-base md:text-xl font-serif font-bold italic text-primary-olive truncate max-w-[120px] md:max-w-none">Family Tree</h1>
+          <h1 className="text-base md:text-xl font-serif font-bold italic text-primary-olive truncate max-w-[150px] md:max-w-none">Genealogi Kiai Qomaruddin</h1>
           {user && (
             <div className="hidden sm:flex ml-2 md:ml-4 items-center gap-1.5 px-3 py-1 bg-primary-olive/10 text-primary-olive rounded-full text-[9px] font-bold uppercase tracking-widest border border-primary-olive/20 whitespace-nowrap">
               <ShieldCheck size={10} /> Admin
@@ -540,7 +548,7 @@ export default function App() {
                 <span className="text-[12px] font-bold text-ink uppercase tracking-wider">Cek Hubungan</span>
               </button>
               <a 
-                href="https://wa.me/6281234567890" 
+                href="https://wa.me/628995023222" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="w-full flex items-center gap-3 p-3 bg-white border border-border-olive rounded-xl shadow-sm hover:shadow-md transition-all group"

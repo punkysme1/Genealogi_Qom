@@ -17,11 +17,19 @@ export const LembagaProfile: React.FC<LembagaProfileProps> = ({ onClose }) => {
       <div className="bg-bg w-full max-w-2xl max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-border-olive/30 shadow-primary-olive/20">
         <div className="p-4 bg-primary-olive text-white flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
-              <ShieldCheck className="text-white" size={24} />
+            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center p-1 shadow-inner overflow-hidden border border-border-olive/10">
+              <img 
+                src="https://drive.google.com/thumbnail?id=1fef9BVeWH_dsPNtk4udPh-MpivNcUiRJ&sz=w200" 
+                alt="Logo Qomaruddin" 
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.parentElement!.innerHTML = '<span class="text-primary-olive font-serif font-black text-xl">Q</span>';
+                }}
+              />
             </div>
             <div>
-              <h2 className="text-lg font-bold leading-tight uppercase tracking-widest">Unit Lembaga Genealogi</h2>
+              <h2 className="text-lg font-bold leading-tight uppercase tracking-widest font-serif">Unit Lembaga Genealogi</h2>
               <p className="text-[10px] opacity-80 uppercase font-medium tracking-tighter">Yayasan Pondok Pesantren Qomaruddin</p>
             </div>
           </div>
@@ -79,8 +87,8 @@ export const LembagaProfile: React.FC<LembagaProfileProps> = ({ onClose }) => {
             </div>
             <div className="space-y-2">
               {[
-                { role: "Ketua Lembaga", name: "Kiai Qomaruddin" },
-                { role: "Sekretaris", name: "KH. Sholeh Awwal" },
+                { role: "Ketua Lembaga", name: "K.H. Ahmad Iklil Sholeh" },
+                { role: "Sekretaris", name: "Ust. M. Muallif" },
                 { role: "Divisi IT & Database", name: "Tim IT Qomaruddin" },
                 { role: "Tim Verifikator", name: "Dewan Kiai Sampurnan" }
               ].map((person, i) => (
@@ -100,7 +108,7 @@ export const LembagaProfile: React.FC<LembagaProfileProps> = ({ onClose }) => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <a 
-                href="https://wa.me/6281234567890" 
+                href="https://wa.me/628995023222" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm hover:shadow-md transition-all group"
@@ -110,7 +118,7 @@ export const LembagaProfile: React.FC<LembagaProfileProps> = ({ onClose }) => {
                 </div>
                 <div>
                   <p className="text-[10px] text-ink-light uppercase font-black tracking-tighter">WhatsApp Admin</p>
-                  <p className="text-xs font-bold text-ink">+62 812-3456-7890</p>
+                  <p className="text-xs font-bold text-ink">+62 899-5023-222</p>
                 </div>
                 <ExternalLink size={14} className="ml-auto text-ink-light group-hover:text-primary-olive" />
               </a>

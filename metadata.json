@@ -1,6 +1,6 @@
 {
-  "name": "Family Tree Qomaruddin",
-  "description": "Interactive genealogy application for the Qomaruddin family, supporting 9+ generations, recursive relationships, and Javanese kinship logic.",
+  "name": "Genealogi Kiai Qomaruddin",
+  "description": "Sistem Informasi Genealogi Keluarga Besar Pondok Pesantren Qomaruddin Sampurnan Bungah.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
