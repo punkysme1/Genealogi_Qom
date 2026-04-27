@@ -21,6 +21,21 @@ export interface Individual {
   updated_at: string;
 }
 
+export type RelationshipType = 
+  | 'AYAH' | 'IBU' | 'ANAK' | 'CUCU' | 'KAKEK' | 'NENEK' 
+  | 'PAMAN' | 'BIBI' | 'KEPONAKAN' | 'SEPUPU' | 'SAUDARA'
+  | 'CAK' | 'DEK' | 'PAKDE' | 'BUDHE' | 'PAKLEK' | 'BULEK' 
+  | 'MERTUA' | 'IPAR' | 'MENANTU' | 'TIDAK_ADA_HUBUNGAN';
+
+export interface RelationshipResult {
+  fromId: string;
+  toId: string;
+  type: RelationshipType;
+  distance: number;
+  description: string;
+  commonAncestorId?: string;
+}
+
 export interface Marriage {
   id: string;
   husband_id: string;

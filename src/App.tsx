@@ -9,6 +9,8 @@ import AdminPanel from '@/components/Admin/AdminPanel';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { generateGenealogyIDs, calculateGenerations } from '@/lib/genealogy';
+import { LembagaProfile } from '@/components/Admin/LembagaProfile';
+import { RelationshipSearch } from '@/components/Sidebar/RelationshipSearch';
 import { 
   Search, 
   Filter, 
@@ -23,7 +25,9 @@ import {
   Calendar,
   Menu,
   BarChart3,
-  X as CloseIcon
+  X as CloseIcon,
+  PhoneCall,
+  ArrowRightLeft
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -83,6 +87,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [isLembagaOpen, setIsLembagaOpen] = useState(false);
+  const [isRelationshipSearchOpen, setIsRelationshipSearchOpen] = useState(false);
   const [adminTargetIndividual, setAdminTargetIndividual] = useState<Individual | null>(null);
   const [user, setUser] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -513,6 +519,41 @@ export default function App() {
           </div>
 
           <div>
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3 italic">Menu Lembaga</h3>
+            <div className="space-y-2">
+              <button 
+                onClick={() => setIsLembagaOpen(true)}
+                className="w-full flex items-center gap-3 p-3 bg-white border border-border-olive rounded-xl shadow-sm hover:shadow-md transition-all group"
+              >
+                <div className="w-8 h-8 bg-primary-olive/10 rounded-lg flex items-center justify-center text-primary-olive group-hover:scale-110 transition-transform">
+                  <ShieldCheck size={18} />
+                </div>
+                <span className="text-[12px] font-bold text-ink uppercase tracking-wider">Profil Lembaga</span>
+              </button>
+              <button 
+                onClick={() => setIsRelationshipSearchOpen(true)}
+                className="w-full flex items-center gap-3 p-3 bg-white border border-border-olive rounded-xl shadow-sm hover:shadow-md transition-all group"
+              >
+                <div className="w-8 h-8 bg-secondary-rust/10 rounded-lg flex items-center justify-center text-secondary-rust group-hover:scale-110 transition-transform">
+                  <ArrowRightLeft size={18} />
+                </div>
+                <span className="text-[12px] font-bold text-ink uppercase tracking-wider">Cek Hubungan</span>
+              </button>
+              <a 
+                href="https://wa.me/6281234567890" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-full flex items-center gap-3 p-3 bg-white border border-border-olive rounded-xl shadow-sm hover:shadow-md transition-all group"
+              >
+                <div className="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
+                  <PhoneCall size={18} />
+                </div>
+                <span className="text-[12px] font-bold text-ink uppercase tracking-wider">Call Center</span>
+              </a>
+            </div>
+          </div>
+
+          <div>
             <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3 italic">Kalender Kelahiran</h3>
             <div className="bg-white border border-border-olive rounded-xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
@@ -621,16 +662,32 @@ export default function App() {
       />
 
       {/* Modals */}
-      {isLoginOpen && (
-        <LoginPage onBack={() => setIsLoginOpen(false)} />
-      )}
-      
       <AnimatePresence>
+        {isLoginOpen && (
+          <LoginPage onBack={() => setIsLoginOpen(false)} />
+        )}
+        
         {isAdminPanelOpen && (
           <AdminPanel 
             onClose={() => setIsAdminPanelOpen(false)} 
             selectedIndividual={adminTargetIndividual}
             onRefresh={fetchData}
+          />
+        )}
+
+        {isLembagaOpen && (
+          <LembagaProfile onClose={() => setIsLembagaOpen(false)} />
+        )}
+
+        {isRelationshipSearchOpen && (
+          <RelationshipSearch 
+            individuals={individuals}
+            onClose={() => setIsRelationshipSearchOpen(false)}
+            onSelectIndividual={(id) => {
+              const ind = individuals.find(i => i.id === id);
+              if (ind) setSelectedIndividual(ind);
+              setIsRelationshipSearchOpen(false);
+            }}
           />
         )}
       </AnimatePresence>
