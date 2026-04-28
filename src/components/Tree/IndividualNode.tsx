@@ -56,26 +56,23 @@ const IndividualNode = memo(({ data }: IndividualNodeProps) => {
         </div>
         
         <div className="flex flex-col gap-0.5 mt-1">
-          <div className="flex items-center gap-1.5">
-            {individual.ref_code && (
-              <span className="text-[9px] font-bold text-primary-olive uppercase bg-primary-olive/5 px-1.5 py-0.5 rounded border border-primary-olive/10">
-                {individual.ref_code} {(individual.ref_code.startsWith('G') || !isNaN(Number(individual.ref_code))) ? '(generasi)' : ''}
+          {individual.ref_code && (
+            <p className="text-[9px] font-bold text-primary-olive uppercase leading-tight flex flex-wrap items-center gap-1">
+              {individual.ref_code} 
+              <span className="text-ink-light font-medium normal-case tracking-tight">
+                ({individual.ref_code.startsWith('G') ? 'Generasi terdekat ke Qomaruddin' : 'Kode Referensi'})
               </span>
-            )}
-          </div>
-          <p className="text-[10px] text-ink-light font-bold flex items-center gap-1">
-            <span className={cn(
-              "w-1.5 h-1.5 rounded-full shrink-0",
-              (individual.is_alive === false || individual.death_date) ? "bg-zinc-400" : "bg-emerald-500"
-            )} />
-            {(individual.is_alive === false || individual.death_date) ? 'Sudah Wafat' : 'Masih Hidup'}
-            <span className="opacity-30">•</span>
-            <span className="truncate">{individual.current_location || individual.death_place || 'Sampurnan'}</span>
+            </p>
+          )}
+          <p className="text-[10px] text-ink-light font-bold flex items-center gap-1 truncate">
+            Status {(individual.is_alive === false || individual.death_date) ? 'Sudah Wafat' : 'Masih Hidup'}
+            <span className="opacity-30">-</span>
+            <span className="truncate italic font-medium">({individual.current_location || individual.death_place || '?'})</span>
           </p>
         </div>
 
         {individual.is_verified && (
-          <p className="text-[8px] text-verified-green font-black uppercase tracking-widest mt-1 opacity-80">
+          <p className="text-[8px] text-verified-green font-black uppercase tracking-widest mt-1 opacity-90 border-t border-verified-green/10 pt-1">
             v: {individual.verified_by || 'Admin Pusat'}
           </p>
         )}
