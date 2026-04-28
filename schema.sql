@@ -4,6 +4,7 @@
 CREATE TABLE individuals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
+    ref_code TEXT UNIQUE, -- Penomoran/Pengkodean
     gender CHAR(1) CHECK (gender IN ('M', 'F')),
     birth_date DATE,
     death_date DATE,
@@ -12,7 +13,9 @@ CREATE TABLE individuals (
     education TEXT,
     occupation TEXT,
     bio TEXT,
+    is_alive BOOLEAN DEFAULT TRUE,
     is_verified BOOLEAN DEFAULT FALSE,
+    verified_by TEXT, -- Nama verifikator
     father_id UUID REFERENCES individuals(id),
     mother_id UUID REFERENCES individuals(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),

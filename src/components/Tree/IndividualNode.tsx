@@ -35,42 +35,46 @@ export default function IndividualNode({ data }: IndividualNodeProps) {
       <Handle type="target" position={Position.Top} className="w-2 h-2 !bg-accent-tan border-none" />
       
       <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-1">
-          <div className="flex items-center gap-2 truncate">
-            <div className={cn(
-              "w-2 h-2 rounded-full shrink-0",
-              individual.gender === 'M' ? "bg-blue-500" : "bg-rose-500"
-            )} />
-            <p className="text-[13px] font-bold text-ink truncate leading-tight">
-              {individual.name}
-            </p>
-          </div>
+        <div className="flex items-center gap-1.5 overflow-hidden">
+          <div className={cn(
+            "w-2.5 h-2.5 rounded-full shrink-0 shadow-sm",
+            individual.gender === 'M' ? "bg-blue-500 border border-blue-600" : "bg-rose-400 border border-rose-500"
+          )} />
+          <p className="text-[13px] font-bold text-ink truncate leading-tight flex-1">
+            {individual.name}
+          </p>
           {individual.is_verified && (
             <div 
-              className="w-3.5 h-3.5 bg-verified-green rounded-full flex items-center justify-center shrink-0 cursor-help"
-              title={`Verified by: ${individual.verified_by || 'System'}`}
+              className="w-3.5 h-3.5 bg-verified-green rounded-full flex items-center justify-center shrink-0 shadow-sm"
+              title={`Verified by: ${individual.verified_by || 'Admin Pusat'}`}
             >
-              <div className="w-1.5 h-1 border-l-1.5 border-b-1.5 border-white -rotate-45 mt-[-1px]" />
+              <CheckCircle className="text-white w-2.5 h-2.5" />
             </div>
           )}
         </div>
         
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
-          {individual.ref_code && (
-            <span className="text-[8px] font-mono font-bold bg-accent-tan/20 text-primary-olive px-1 rounded border border-accent-tan/30 uppercase">
-              {individual.ref_code}
-            </span>
-          )}
-          <p className="text-[10px] text-ink-light font-medium">
-            {individual.birth_date ? new Date(individual.birth_date).getFullYear() : '????'} 
-            {' - '} 
-            {individual.death_date ? new Date(individual.death_date).getFullYear() : 'Sekarang'}
+        <div className="flex flex-col gap-0.5 mt-1">
+          <div className="flex items-center gap-1.5">
+            {individual.ref_code && (
+              <span className="text-[9px] font-bold text-primary-olive uppercase bg-primary-olive/5 px-1.5 py-0.5 rounded border border-primary-olive/10">
+                {individual.ref_code} {(individual.ref_code.startsWith('G') || !isNaN(Number(individual.ref_code))) ? '(generasi)' : ''}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-ink-light font-bold flex items-center gap-1">
+            <span className={cn(
+              "w-1.5 h-1.5 rounded-full shrink-0",
+              (individual.is_alive === false || individual.death_date) ? "bg-zinc-400" : "bg-emerald-500"
+            )} />
+            {(individual.is_alive === false || individual.death_date) ? 'Sudah Wafat' : 'Masih Hidup'}
+            <span className="opacity-30">•</span>
+            <span className="truncate">{individual.current_location || individual.death_place || 'Sampurnan'}</span>
           </p>
         </div>
 
-        {individual.is_verified && individual.verified_by && (
-          <p className="text-[7px] text-verified-green font-bold uppercase tracking-tighter mt-0.5 italic">
-            v: {individual.verified_by}
+        {individual.is_verified && (
+          <p className="text-[8px] text-verified-green font-black uppercase tracking-widest mt-1 opacity-80">
+            v: {individual.verified_by || 'Admin Pusat'}
           </p>
         )}
       </div>

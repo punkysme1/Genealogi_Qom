@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Individual, Marriage, Event } from '@/types';
 import { getJavaneseDescendantTerm } from '@/lib/relationships';
 import { generateGenealogyIDs } from '@/lib/genealogy';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { 
   Calendar, 
@@ -130,6 +131,22 @@ export default function IndividualDetail({
             </div>
             <h2 className="text-xl font-bold text-ink">{individual.name}</h2>
             
+            <div className="mt-2 flex items-center justify-center gap-2">
+              <span className={cn(
+                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
+                (individual.is_alive === false || individual.death_date) 
+                  ? "bg-zinc-100 text-zinc-500 border-zinc-300" 
+                  : "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm shadow-emerald-100"
+              )}>
+                {(individual.is_alive === false || individual.death_date) ? 'Sudah Wafat' : 'Masih Hidup'}
+              </span>
+              {individual.current_location && individual.is_alive !== false && !individual.death_date && (
+                <span className="flex items-center gap-1 text-[10px] text-ink-light bg-bg px-2 py-1 rounded-full border border-border-olive/30 italic">
+                  <MapPin size={10} className="text-primary-olive" /> {individual.current_location}
+                </span>
+              )}
+            </div>
+            
             <div className="mt-4 flex flex-col items-center gap-2">
               <div className="flex flex-col items-center p-3 bg-white rounded-xl border border-border-olive w-full shadow-sm group relative">
                 <span className="text-[10px] font-bold text-ink-light uppercase tracking-widest flex items-center gap-1.5 mb-1 cursor-help">
@@ -235,7 +252,7 @@ export default function IndividualDetail({
                   <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Pasangan</span>
                   <div className="flex flex-col gap-1">
                     {spousesWithMarriage.length > 0 ? spousesWithMarriage.map(({ spouse, marriage }) => (
-                      <div key={spouse?.id} className="flex flex-col">
+                      <div key={marriage.id} className="flex flex-col">
                         <button 
                           onClick={() => spouse && onSelectIndividual?.(spouse)}
                           className="text-left font-medium text-ink italic leading-tight hover:text-primary-olive transition-colors underline decoration-border-olive/30 underline-offset-2"

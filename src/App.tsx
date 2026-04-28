@@ -94,6 +94,8 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [selectedGen, setSelectedGen] = useState<number | null>(null);
+  const [selectedLoc, setSelectedLoc] = useState<string | null>(null);
+  const [lifeStatusFilter, setLifeStatusFilter] = useState<'all' | 'alive' | 'deceased'>('all');
   const [verificationFilter, setVerificationFilter] = useState<'all' | 'verified' | 'unverified'>('all');
   const [searchResults, setSearchResults] = useState<Individual[]>([]);
 
@@ -189,8 +191,10 @@ export default function App() {
     let lastUpdate: string | null = null;
     let verifiedCount = 0;
     let unverifiedCount = 0;
+    let aliveCount = 0;
+    let deceasedCount = 0;
 
-    if (!individuals.length) return { sortedLocs: [], sortedGens: [], lastUpdate: null, verifiedCount: 0, unverifiedCount: 0 };
+    if (!individuals.length) return { sortedLocs: [], sortedGens: [], lastUpdate: null, verifiedCount: 0, unverifiedCount: 0, aliveCount: 0, deceasedCount: 0 };
 
     const { levels } = calculateGenerations(individuals);
 
@@ -198,6 +202,13 @@ export default function App() {
       // Verified status
       if (ind.is_verified) verifiedCount++;
       else unverifiedCount++;
+
+      // Life status
+      if (ind.is_alive === false || ind.death_date) {
+        deceasedCount++;
+      } else {
+        aliveCount++;
+      }
 
       // Location logic
       const rawLoc = ind.current_location || ind.death_place;
@@ -227,13 +238,32 @@ export default function App() {
       .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
       .map(([gen, count]) => ({ gen: parseInt(gen), label: `Gen ${gen}`, count }));
 
-    return { sortedLocs, sortedGens, lastUpdate, verifiedCount, unverifiedCount };
+    return { sortedLocs, sortedGens, lastUpdate, verifiedCount, unverifiedCount, aliveCount, deceasedCount };
   }, [individuals]);
 
   const filteredIndividualsByGen = React.useMemo(() => {
-    if (selectedGen === null) return [];
+    if (selectedGen === null && selectedLoc === null && lifeStatusFilter === 'all' && verificationFilter === 'all') return [];
+    
     const { levels } = calculateGenerations(individuals);
-    let filtered = individuals.filter(ind => levels[ind.id] === selectedGen);
+    let filtered = [...individuals];
+
+    if (selectedGen !== null) {
+      filtered = filtered.filter(ind => levels[ind.id] === selectedGen);
+    }
+
+    if (selectedLoc !== null) {
+      filtered = filtered.filter(ind => {
+        const rawLoc = ind.current_location || ind.death_place;
+        const loc = rawLoc?.split(',')[0].trim() || 'Tidak Diketahui';
+        return loc === selectedLoc;
+      });
+    }
+
+    if (lifeStatusFilter === 'alive') {
+      filtered = filtered.filter(ind => ind.is_alive !== false && !ind.death_date);
+    } else if (lifeStatusFilter === 'deceased') {
+      filtered = filtered.filter(ind => ind.is_alive === false || ind.death_date);
+    }
     
     if (verificationFilter === 'verified') {
       filtered = filtered.filter(ind => ind.is_verified);
@@ -242,7 +272,7 @@ export default function App() {
     }
     
     return filtered;
-  }, [individuals, selectedGen, verificationFilter]);
+  }, [individuals, selectedGen, selectedLoc, lifeStatusFilter, verificationFilter]);
 
   return (
     <ErrorBoundary>
@@ -450,13 +480,48 @@ export default function App() {
           </div>
 
           <div>
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3">Status Kehidupan</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                onClick={() => setLifeStatusFilter(lifeStatusFilter === 'alive' ? 'all' : 'alive')}
+                className={cn(
+                  "p-3 rounded-xl border transition-all flex flex-col items-center gap-1",
+                  lifeStatusFilter === 'alive' ? "bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500" : "bg-bg/40 border-border-olive/20 hover:border-emerald-200"
+                )}
+              >
+                <span className="text-2xl font-light text-emerald-600">{stats.aliveCount}</span>
+                <span className="text-[9px] uppercase font-bold text-ink-light">Masih Hidup</span>
+              </button>
+              <button 
+                onClick={() => setLifeStatusFilter(lifeStatusFilter === 'deceased' ? 'all' : 'deceased')}
+                className={cn(
+                  "p-3 rounded-xl border transition-all flex flex-col items-center gap-1",
+                  lifeStatusFilter === 'deceased' ? "bg-zinc-100 border-zinc-500 ring-1 ring-zinc-500 text-zinc-900" : "bg-bg/40 border-border-olive/20 hover:border-zinc-300"
+                )}
+              >
+                <span className="text-2xl font-light text-zinc-400">{stats.deceasedCount}</span>
+                <span className="text-[9px] uppercase font-bold text-ink-light">Wafat</span>
+              </button>
+            </div>
+          </div>
+
+          <div>
             <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-3">Sebaran Wilayah (Domisili)</h3>
-            <div className="space-y-2">
+            <div className="space-y-1">
               {stats.sortedLocs.map((loc) => (
-                <div key={loc.name} className="flex justify-between text-[12px] py-1.5 border-b border-border-olive/50 last:border-0">
-                  <span className="text-ink">{loc.name}</span>
-                  <span className="font-bold text-primary-olive">{loc.count}</span>
-                </div>
+                <button 
+                  key={loc.name} 
+                  onClick={() => setSelectedLoc(selectedLoc === loc.name ? null : loc.name)}
+                  className={cn(
+                    "w-full flex justify-between text-[12px] p-2 rounded-lg transition-all border",
+                    selectedLoc === loc.name 
+                      ? "bg-primary-olive text-white border-primary-olive shadow-sm" 
+                      : "hover:bg-bg border-transparent border-dashed hover:border-border-olive"
+                  )}
+                >
+                  <span className={selectedLoc === loc.name ? "text-white" : "text-ink"}>{loc.name}</span>
+                  <span className={cn("font-bold", selectedLoc === loc.name ? "text-white" : "text-primary-olive")}>{loc.count}</span>
+                </button>
               ))}
               {stats.sortedLocs.length === 0 && (
                 <p className="text-[10px] text-ink-light italic text-center py-2">Data belum tersedia</p>
@@ -482,13 +547,26 @@ export default function App() {
               ))}
             </div>
 
-            {selectedGen !== null && (
+            {(selectedGen !== null || selectedLoc !== null || lifeStatusFilter !== 'all' || verificationFilter !== 'all') && (
               <div className="bg-bg p-3 rounded-lg border border-primary-olive/20 mb-4 animate-in slide-in-from-top-2">
                 <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-[10px] font-bold uppercase text-primary-olive">Daftar Gen {selectedGen}</h4>
-                  <button onClick={() => setSelectedGen(null)} className="text-[9px] text-ink-light hover:text-rose-500">Tutup</button>
+                  <div className="flex flex-col">
+                    <h4 className="text-[10px] font-bold uppercase text-primary-olive">Hasil Filter</h4>
+                    <span className="text-[8px] text-ink-light italic">Ditemukan {filteredIndividualsByGen.length} orang</span>
+                  </div>
+                  <button 
+                    onClick={() => { 
+                      setSelectedGen(null); 
+                      setSelectedLoc(null); 
+                      setLifeStatusFilter('all'); 
+                      setVerificationFilter('all'); 
+                    }} 
+                    className="text-[9px] text-rose-500 font-bold uppercase tracking-tighter hover:underline"
+                  >
+                    Reset Filter
+                  </button>
                 </div>
-                <div className="max-h-32 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                <div className="max-h-40 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                   {filteredIndividualsByGen.map(ind => (
                     <button 
                       key={ind.id} 

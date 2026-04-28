@@ -13,6 +13,7 @@ export interface Individual {
   education?: string;
   occupation?: string;
   bio?: string;
+  is_alive?: boolean;
   is_verified: boolean;
   verified_by?: string; // Verifikator
   father_id?: string;

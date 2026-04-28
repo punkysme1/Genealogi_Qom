@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Individual, Event, Marriage } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { suggestHenryCode, findSpouse, generateGenealogyIDs } from '@/lib/genealogy';
+import { cn } from '@/lib/utils';
 import { X, Save, Trash2, UserPlus, ShieldCheck, AlertCircle, Search, ChevronRight, ArrowLeft, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -30,6 +31,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     death_place: '',
     current_location: '',
     occupation: '',
+    is_alive: true,
     is_verified: false,
     verified_by: '',
     father_id: '',
@@ -210,6 +212,19 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     }
   };
 
+  // Auto-sync is_alive and death_date
+  useEffect(() => {
+    if (formData.death_date && formData.death_date !== '' && formData.is_alive !== false) {
+      setFormData(prev => ({ ...prev, is_alive: false }));
+    }
+  }, [formData.death_date]);
+
+  useEffect(() => {
+    if (formData.is_alive === true && formData.death_date !== '') {
+      setFormData(prev => ({ ...prev, death_date: '' }));
+    }
+  }, [formData.is_alive]);
+
   useEffect(() => {
     if (initialSelected) {
       setFormData(initialSelected);
@@ -252,6 +267,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       if (cleanData.death_date === '') cleanData.death_date = null;
       if (cleanData.verified_by === '') cleanData.verified_by = null;
       if (cleanData.ref_code === '') cleanData.ref_code = null;
+      if (cleanData.is_alive === undefined) cleanData.is_alive = true;
       if (cleanData.birth_place === '') cleanData.birth_place = null;
       if (cleanData.death_place === '') cleanData.death_place = null;
       if (cleanData.current_location === '') cleanData.current_location = null;
@@ -298,6 +314,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       death_place: '',
       current_location: '',
       occupation: '',
+      is_alive: true,
       is_verified: false,
       verified_by: '',
       father_id: '',
@@ -448,6 +465,36 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                         <option key={i.id} value={i.id}>{i.name} ({i.ref_code || '?'})</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-ink-light mb-1.5 flex items-center justify-between">
+                      <span>Status Kehidupan</span>
+                      <span className={formData.is_alive ? "text-emerald-600 font-black" : "text-rose-600 font-black"}>
+                        {formData.is_alive ? 'MASIH HIDUP' : 'SUDAH WAFAT'}
+                      </span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => setFormData({...formData, is_alive: true})}
+                        className={cn(
+                          "py-2.5 rounded-lg border text-xs font-bold transition-all",
+                          formData.is_alive ? "bg-emerald-500 text-white border-emerald-600" : "bg-white text-emerald-600 border-border-olive"
+                        )}
+                      >
+                        Hidup
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setFormData({...formData, is_alive: false})}
+                        className={cn(
+                          "py-2.5 rounded-lg border text-xs font-bold transition-all",
+                          !formData.is_alive ? "bg-rose-500 text-white border-rose-600" : "bg-white text-rose-600 border-border-olive"
+                        )}
+                      >
+                        Wafat
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <p className="text-[10px] text-ink-light italic">Pasangan akan otomatis terisi jika data pernikahan tersedia.</p>
