@@ -1,3 +1,4 @@
+import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Individual } from '@/types';
 import { User, CheckCircle } from 'lucide-react';
@@ -17,13 +18,14 @@ interface IndividualNodeProps {
   };
 }
 
-export default function IndividualNode({ data }: IndividualNodeProps) {
+const IndividualNode = memo(({ data }: IndividualNodeProps) => {
   const { individual, isSelected, isHighlighted, isInLineage } = data;
 
   return (
     <div
+      id={`node-${individual.id}`}
       className={cn(
-        'px-4 py-3 shadow-sm rounded-lg border transition-all duration-300 w-[240px]',
+        'px-4 py-3 shadow-sm rounded-lg border transition-all duration-300 w-[240px] contain-paint',
         individual.gender === 'M' 
           ? 'bg-blue-50/30 border-blue-200/50' 
           : 'bg-rose-50/30 border-rose-200/50',
@@ -82,4 +84,8 @@ export default function IndividualNode({ data }: IndividualNodeProps) {
       <Handle type="source" position={Position.Bottom} className="w-2 h-2 !bg-accent-tan border-none" />
     </div>
   );
-}
+});
+
+IndividualNode.displayName = 'IndividualNode';
+
+export default IndividualNode;

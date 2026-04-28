@@ -97,7 +97,16 @@ export default function App() {
   const [selectedLoc, setSelectedLoc] = useState<string | null>(null);
   const [lifeStatusFilter, setLifeStatusFilter] = useState<'all' | 'alive' | 'deceased'>('all');
   const [verificationFilter, setVerificationFilter] = useState<'all' | 'verified' | 'unverified'>('all');
-  const [searchResults, setSearchResults] = useState<Individual[]>([]);
+  const [searchResults, setSearchResults] = useState<(Individual & { displayId: string })[]>([]);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+  // Debounce search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   const fetchData = async () => {
     try {
@@ -129,28 +138,37 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (searchQuery.trim().length > 1) {
-      // Find individuals whose name matches OR whose Display-ID/Shortcode matches
-      const results = (individuals || []).filter(ind => {
-        if (!ind || !ind.name) return false;
-        const nameMatches = ind.name.toLowerCase().includes(searchQuery.toLowerCase());
-        
-        // Also check if the alphanumeric code matches if user is typing a code
-        // We calculate ID on the fly for search if name doesn't match
-        if (nameMatches) return true;
-        
+    const query = debouncedSearchQuery.trim().toLowerCase();
+    if (query.length > 1) {
+      const results: (Individual & { displayId: string })[] = [];
+      
+      const pool = individuals || [];
+      for (const ind of pool) {
+        if (!ind || !ind.name) continue;
+        if (results.length >= 30) break;
+
+        const nameMatches = ind.name.toLowerCase().includes(query);
+        let idMatched = false;
+        let cachedId = '';
+
+        // Hanya hitung ID jika nama tidak cocok, ATAU jika kita memang butuh ID untuk ditampilkan
         try {
           const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
-          return displayId.toLowerCase().includes(searchQuery.toLowerCase());
-        } catch (e) {
-          return false;
+          cachedId = displayId;
+          if (!nameMatches && displayId.toLowerCase().includes(query)) {
+            idMatched = true;
+          }
+        } catch (e) {}
+
+        if (nameMatches || idMatched) {
+          results.push({ ...ind, displayId: cachedId });
         }
-      }).slice(0, 50); // Show more results to ensure duplicates show up
+      }
       setSearchResults(results);
     } else {
       setSearchResults([]);
     }
-  }, [searchQuery, individuals]);
+  }, [debouncedSearchQuery, individuals, marriages]);
 
   useEffect(() => {
     fetchData();
@@ -325,13 +343,12 @@ export default function App() {
                   className="absolute top-full mt-2 left-0 right-0 bg-white border border-border-olive rounded-xl shadow-xl z-50 py-2 max-h-[300px] overflow-y-auto"
                 >
                   {searchResults.map(ind => {
-                    const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
                     return (
                       <button
                         key={ind.id}
                         onClick={() => {
                           setSelectedIndividual(ind);
-                          setSearchQuery(ind.name);
+                          setSearchQuery(ind.name || '');
                           setSearchResults([]);
                         }}
                         className="w-full px-4 py-2 hover:bg-bg flex items-center justify-between group transition-colors text-left"
@@ -346,7 +363,7 @@ export default function App() {
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
                           <span className="text-[9px] font-mono font-bold bg-accent-tan/20 text-primary-olive px-1.5 py-0.5 rounded border border-accent-tan/30 leading-none">
-                            {displayId}
+                            {ind.displayId}
                           </span>
                         </div>
                       </button>
@@ -419,7 +436,6 @@ export default function App() {
               {searchResults.length > 0 && (
                 <div className="mt-4 space-y-2 max-h-[300px] overflow-y-auto">
                   {searchResults.map(ind => {
-                    const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
                     return (
                       <button
                         key={ind.id}
@@ -440,7 +456,7 @@ export default function App() {
                           </p>
                         </div>
                         <span className="text-[11px] font-mono font-bold bg-primary-olive/10 text-primary-olive px-2 py-1 rounded shrink-0">
-                          {displayId}
+                          {ind.displayId}
                         </span>
                       </button>
                     );
