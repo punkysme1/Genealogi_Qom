@@ -101,11 +101,11 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<(Individual & { displayId: string })[]>([]);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
-  // Memoize levels and ranks to avoid redundant heavy calculations
+  // Memoize levels, ranks and shortestPaths to avoid redundant heavy calculations
   const genMetadata = React.useMemo(() => {
-    if (!individuals.length) return { levels: {}, ranks: {} };
-    return calculateGenerations(individuals);
-  }, [individuals]);
+    if (!individuals.length) return { levels: {}, ranks: {}, shortestPaths: {} };
+    return calculateGenerations(individuals, marriages);
+  }, [individuals, marriages]);
 
   // Debounce search query
   useEffect(() => {
@@ -150,7 +150,7 @@ export default function App() {
       const results: (Individual & { displayId: string })[] = [];
       
       const pool = individuals || [];
-      const { levels, ranks } = genMetadata;
+      const { levels, ranks, shortestPaths } = genMetadata;
 
       for (const ind of pool) {
         if (!ind || !ind.name) continue;
@@ -162,7 +162,7 @@ export default function App() {
 
         try {
           // Pass pre-calculated metadata!
-          const { displayId } = generateGenealogyIDs(ind, individuals, marriages, levels, ranks, true);
+          const { displayId } = generateGenealogyIDs(ind, individuals, marriages, levels, ranks, shortestPaths, true);
           cachedId = displayId;
           if (!nameMatches && displayId.toLowerCase().includes(query)) {
             idMatched = true;

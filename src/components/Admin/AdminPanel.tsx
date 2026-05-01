@@ -28,10 +28,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   }, [allIndividuals, searchListQuery]);
 
   const enrichedList = useMemo(() => {
-    const { levels, ranks } = calculateGenerations(allIndividuals);
+    const { levels, ranks, shortestPaths } = calculateGenerations(allIndividuals, allMarriages);
     return filteredList.map(ind => ({
       ...ind,
-      genData: generateGenealogyIDs(ind, allIndividuals, allMarriages, levels, ranks, true)
+      genData: generateGenealogyIDs(ind, allIndividuals, allMarriages, levels, ranks, shortestPaths, true)
     }));
   }, [filteredList, allIndividuals, allMarriages]);
   

@@ -49,6 +49,7 @@ export default function IndividualDetail({
   }, [individual?.id]);
 
   const { 
+    level,
     baseId, 
     pathIds, 
     displayId, 
@@ -56,7 +57,7 @@ export default function IndividualDetail({
     alphaPaths
   } = useMemo(() => {
     if (!individual) {
-      return { baseId: '-', pathIds: [], displayId: '-', shortestPath: '', alphaPaths: [] };
+      return { level: 0, baseId: '-', pathIds: [], displayId: '-', shortestPath: '', alphaPaths: [] };
     }
     
     return generateGenealogyIDs(individual, individuals, marriages);
@@ -216,9 +217,9 @@ export default function IndividualDetail({
             </div>
 
             <div className="mt-4 inline-block bg-primary-olive text-white px-3 py-1 rounded-full text-[11px] font-medium">
-              {shortestPath === 'Root' || shortestPath === 'G0' || shortestPath === '' 
+              {shortestPath === 'Root' || shortestPath === 'G0' || shortestPath === '' || level === 0 
                 ? 'Pendiri / Leluhur Utama' 
-                : getJavaneseDescendantTerm(shortestPath.length - 2)}
+                : getJavaneseDescendantTerm(level - 1)}
             </div>
             
             {individual.is_verified && (

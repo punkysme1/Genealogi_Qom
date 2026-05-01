@@ -38,7 +38,7 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
   // 1. Memoize heavy genealogy calculations - only when data changes
   const { levels, ranks, genDataMap, groups, childMap } = useMemo(() => {
     console.log('Calculating genealogy data for', individuals.length, 'individuals');
-    const { levels, ranks } = calculateGenerations(individuals);
+    const { levels, ranks } = calculateGenerations(individuals, marriages);
     const genDataMap = new Map<string, any>();
     const groups: Record<number, string[]> = {};
     const childMap = new Map<string, string[]>();

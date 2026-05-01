@@ -1,19 +1,15 @@
 import { Individual, Marriage } from '@/types';
 
+// Simple cache to prevent redundant heavy calculations
+const gCache = new Map<string, any>();
+
 /**
  * Henry Numbering System Suggestion
- * 
- * Logic:
- * - If root (no parents): Suggest '1' or '1'
- * - If child: parent_code + (birth_order_index)
- * - If birth_order_index > 9, use parentheses e.g. 1(10)
  */
 export function suggestHenryCode(parentCode: string | undefined, childrenCount: number): string {
   if (!parentCode) return '1';
-  
   const nextIndex = childrenCount + 1;
   const suffix = nextIndex > 9 ? `(${nextIndex})` : `${nextIndex}`;
-  
   return `${parentCode}${suffix}`;
 }
 
@@ -28,69 +24,107 @@ function toAlphaNumeric(index: number): string {
 }
 
 function findRoot(allIndividuals: Individual[]) {
-  const sortedForRoot = [...allIndividuals].sort((a, b) => {
-    const hasParentsA = a.father_id || a.mother_id ? 1 : 0;
-    const hasParentsB = b.father_id || b.mother_id ? 1 : 0;
-    if (hasParentsA !== hasParentsB) return hasParentsA - hasParentsB;
-    // Seniority by creation date as fallback for root
-    return (a.created_at || '').localeCompare(b.created_at || '');
-  });
-  return sortedForRoot.find(i => i && i.name && i.name.includes('Qomaruddin'));
+  return allIndividuals.find(i => i && i.name && i.name.includes('Qomaruddin'));
 }
 
 /**
- * Calculates current generation levels and global ranks for all individuals.
+ * Calculates current generation levels, shortest paths, and global ranks for all individuals.
  */
-export function calculateGenerations(allIndividuals: Individual[]) {
+export function calculateGenerations(allIndividuals: Individual[], marriages: Marriage[] = []) {
   const levels: Record<string, number> = {};
   const ranks: Record<string, number> = {};
-  if (!allIndividuals || allIndividuals.length === 0) return { levels, ranks };
+  const shortestPaths: Record<string, string> = {};
+  
+  if (!allIndividuals || allIndividuals.length === 0) return { levels, ranks, shortestPaths };
 
-  const root = findRoot(allIndividuals);
-  if (!root) return { levels, ranks };
-
-  // Pre-build child map for O(1) lookups
+  const indMap = new Map(allIndividuals.map(i => [i.id, i]));
   const childMap = new Map<string, string[]>();
+  
   allIndividuals.forEach(ind => {
-    if (ind.father_id) {
-      const existing = childMap.get(ind.father_id) || [];
-      childMap.set(ind.father_id, [...existing, ind.id]);
-    }
-    if (ind.mother_id) {
-      const existing = childMap.get(ind.mother_id) || [];
-      childMap.set(ind.mother_id, [...existing, ind.id]);
-    }
+    const parents = [ind.father_id, ind.mother_id].filter(Boolean) as string[];
+    parents.forEach(pId => {
+      if (!childMap.has(pId)) childMap.set(pId, []);
+      if (!childMap.get(pId)!.includes(ind.id)) childMap.get(pId)!.push(ind.id);
+    });
   });
 
-  // BFS with basic cycle detection
-  const queue: { id: string, level: number }[] = [{ id: root.id, level: 0 }];
-  levels[root.id] = 0;
+  // Sort children by birth date for stable alphanumeric indexing
+  childMap.forEach((ids) => {
+    ids.sort((aId, bId) => {
+      const a = indMap.get(aId)!;
+      const b = indMap.get(bId)!;
+      return (a.birth_date || '9999-12-31').localeCompare(b.birth_date || '9999-12-31') || 
+             (a.name || '').localeCompare(b.name || '');
+    });
+  });
+
+  // 1. BFS to find shortest path and depth
+  const root = findRoot(allIndividuals);
+  const queue: { id: string, level: number, path: string }[] = [];
   const visited = new Set<string>();
 
+  if (root) {
+    queue.push({ id: root.id, level: 0, path: '' });
+    levels[root.id] = 0;
+    shortestPaths[root.id] = '';
+  }
+
   while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current || visited.has(current.id)) continue;
-    const { id, level } = current;
+    const { id, level, path } = queue.shift()!;
+    if (visited.has(id)) continue;
     visited.add(id);
-    
-    const childrenIds = childMap.get(id) || [];
-    childrenIds.forEach(childId => {
-      // Safety: Prevent excessive levels
-      if (level < 100 && (levels[childId] === undefined || levels[childId] > level + 1)) {
-        levels[childId] = level + 1;
-        queue.push({ id: childId, level: level + 1 });
+
+    const children = childMap.get(id) || [];
+    children.forEach((childId, index) => {
+      if (!visited.has(childId)) {
+        const char = toAlphaNumeric(index + 1);
+        const childPath = `${path}${char}`;
+        const childLevel = level + 1;
+
+        // If not assigned or shorter path found
+        if (levels[childId] === undefined || childLevel < levels[childId]) {
+          levels[childId] = childLevel;
+          shortestPaths[childId] = childPath;
+          queue.push({ id: childId, level: childLevel, path: childPath });
+        }
       }
     });
   }
 
-  // Ranks
-  const individualsByLevel: Record<number, Individual[]> = {};
-  const indMap = new Map(allIndividuals.map(i => [i.id, i]));
+  // 2. Handle In-laws and isolated nodes (sync levels)
+  let changed = true;
+  let iterations = 0;
+  while (changed && iterations < 10) {
+    changed = false;
+    iterations++;
+    marriages.forEach(m => {
+      const hL = levels[m.husband_id];
+      const wL = levels[m.wife_id];
+      
+      // Case 1: Husband has a level, Wife does not (In-law)
+      if (hL !== undefined && wL === undefined) {
+        levels[m.wife_id] = hL;
+        shortestPaths[m.wife_id] = shortestPaths[m.husband_id] ? `${shortestPaths[m.husband_id]}+` : 'Root+';
+        changed = true;
+      }
+      // Case 2: Wife has a level, Husband does not (In-law)
+      else if (wL !== undefined && hL === undefined) {
+        levels[m.husband_id] = wL;
+        shortestPaths[m.husband_id] = shortestPaths[m.wife_id] ? `${shortestPaths[m.wife_id]}+` : 'Root+';
+        changed = true;
+      }
+      // Case 3: Both have levels but we are NOT syncing them anymore 
+      // to avoid pulling a G4 up to G6 just because of a spouse.
+      // Visualization will handle the vertical displacement.
+    });
+  }
 
-  Object.entries(levels).forEach(([id, level]) => {
+  // 3. Ranks - stable sorting by birth date within level
+  const individualsByLevel: Record<number, Individual[]> = {};
+  allIndividuals.forEach(ind => {
+    const level = levels[ind.id] || 0;
     if (!individualsByLevel[level]) individualsByLevel[level] = [];
-    const ind = indMap.get(id);
-    if (ind) individualsByLevel[level].push(ind);
+    individualsByLevel[level].push(ind);
   });
 
   Object.entries(individualsByLevel).forEach(([levelStr, members]) => {
@@ -104,12 +138,11 @@ export function calculateGenerations(allIndividuals: Individual[]) {
     });
   });
 
-  return { levels, ranks };
+  return { levels, ranks, shortestPaths };
 }
 
 /**
  * Calculates all possible lineage paths for an individual.
- * Hardened against infinite recursion.
  */
 export function calculatePathIDs(individualId: string, allIndividuals: Individual[]): string[] {
   if (!individualId || !allIndividuals || allIndividuals.length === 0) return [];
@@ -118,32 +151,31 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
   if (!root) return [];
   if (individualId === root.id) return ['G0'];
   
-  const paths: string[] = [];
   const indMap = new Map(allIndividuals.map(i => [i.id, i]));
-  
-  // Build child map with sorted children to ensure stable indexing
   const childMap = new Map<string, string[]>();
+  
   allIndividuals.forEach(ind => {
     const parents = [ind.father_id, ind.mother_id].filter(Boolean) as string[];
     parents.forEach(pId => {
       if (!childMap.has(pId)) childMap.set(pId, []);
-      if (!childMap.get(pId)!.includes(ind.id)) childMap.get(pId)!.push(ind.id);
+      const cList = childMap.get(pId)!;
+      if (!cList.includes(ind.id)) cList.push(ind.id);
     });
   });
 
-  // Sort child lists once
+  // Sort children once
   childMap.forEach((ids, pId) => {
     ids.sort((aId, bId) => {
       const a = indMap.get(aId)!;
       const b = indMap.get(bId)!;
-      const dateA = a.birth_date || '9999-12-31';
-      const dateB = b.birth_date || '9999-12-31';
-      return dateA.localeCompare(dateB) || (a.name || '').localeCompare(b.name || '');
+      return (a.birth_date || '9999-12-31').localeCompare(b.birth_date || '9999-12-31') || 
+             (a.name || '').localeCompare(b.name || '');
     });
   });
 
+  const paths: string[] = [];
   function findPaths(currentId: string, currentPath: string, visited: Set<string>) {
-    if (visited.has(currentId)) return; // Cycle protection
+    if (visited.has(currentId) || paths.length > 20) return;
     
     if (currentId === individualId) {
       paths.push(currentPath || 'G0');
@@ -151,13 +183,8 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
     }
 
     const children = childMap.get(currentId) || [];
-    if (children.length === 0) return;
-
     const newVisited = new Set(visited);
     newVisited.add(currentId);
-
-    // Limit path branching to avoid performance explosion
-    if (paths.length > 50) return;
 
     children.forEach((childId, index) => {
       findPaths(childId, `${currentPath}${toAlphaNumeric(index + 1)}`, newVisited);
@@ -169,7 +196,7 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
 }
 
 /**
- * Optimized generation of IDs.
+ * Optimized generation of IDs with caching.
  */
 export function generateGenealogyIDs(
   individual: Individual | null, 
@@ -177,23 +204,56 @@ export function generateGenealogyIDs(
   marriages: Marriage[],
   providedLevels?: Record<string, number>,
   providedRanks?: Record<string, number>,
-  skipArabic: boolean = false
+  providedPaths?: Record<string, string>,
+  skipPaths: boolean = false
 ) {
   if (!individual || !individual.id) {
     return { baseId: '-', pathIds: [], displayId: '-', shortestPath: '', alphaPaths: [] };
   }
 
-  const { levels, ranks } = (providedLevels && providedRanks) 
-    ? { levels: providedLevels, ranks: providedRanks } 
-    : calculateGenerations(allIndividuals);
+  // Cache hit logic
+  const key = `${individual.id}-${allIndividuals.length}-${marriages.length}-${skipPaths ? 's' : 'f'}`;
+  if (gCache.has(key)) return gCache.get(key);
+
+  let levels: Record<string, number>;
+  let ranks: Record<string, number>;
+  let shortestPaths: Record<string, string>;
+
+  if (providedLevels && providedRanks && providedPaths) {
+    levels = providedLevels;
+    ranks = providedRanks;
+    shortestPaths = providedPaths;
+  } else {
+    const gen = calculateGenerations(allIndividuals, marriages);
+    levels = gen.levels;
+    ranks = gen.ranks;
+    shortestPaths = gen.shortestPaths;
+  }
   
   const level = levels[individual.id];
-  const rank = ranks[individual.id];
-  const baseId = level !== undefined ? `G${level}.${rank}` : 'Outer';
+  const baseId = level !== undefined ? `G${level}` : 'Outer';
   
-  const alphaPaths = calculatePathIDs(individual.id, allIndividuals) || [];
+  // Use the pre-calculated shortest path as the primary display ID
+  const bfsShortest = shortestPaths[individual.id];
+  let shortestAlpha = bfsShortest || (individual.name?.includes('Qomaruddin') ? 'G0' : 'Root');
+
+  if (skipPaths) {
+    const result = {
+      level,
+      baseId,
+      pathIds: [],
+      displayId: shortestAlpha === '' ? 'G0' : shortestAlpha,
+      shortestPath: shortestAlpha === '' ? 'G0' : shortestAlpha,
+      alphaPaths: [shortestAlpha === '' ? 'G0' : shortestAlpha]
+    };
+    gCache.set(key, result);
+    return result;
+  }
+
+  // If not skipping, we do the full analysis for multiple paths
+  let alphaPaths = calculatePathIDs(individual.id, allIndividuals) || [];
   
-  // In-law logic
+  // In-law logic if not a direct descendant
   if (alphaPaths.length === 0 && !individual.name?.includes('Qomaruddin')) {
     const spouseMarriages = marriages.filter(m => m.husband_id === individual.id || m.wife_id === individual.id);
     for (const m of spouseMarriages) {
@@ -213,42 +273,45 @@ export function generateGenealogyIDs(
     }
   }
 
-  const sortedAlpha = [...alphaPaths].sort((a, b) => a.length - b.length || a.localeCompare(b));
-  const shortestAlpha = sortedAlpha[0] || (individual.name?.includes('Qomaruddin') ? 'G0' : 'Root');
+  // Ensure we have at least 'Root' if still empty
+  if (alphaPaths.length === 0) {
+    alphaPaths = [individual.name?.includes('Qomaruddin') ? 'G0' : 'Root'];
+  }
 
-  return {
+  const finalShortestAlpha = alphaPaths.sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
+
+  const result = {
+    level,
     baseId,
-    pathIds: skipArabic ? [] : (calculateArabicLineage(individual.id, allIndividuals) || []), 
-    displayId: shortestAlpha,
-    shortestPath: shortestAlpha,
+    pathIds: (calculateArabicLineage(individual.id, allIndividuals) || []), 
+    displayId: finalShortestAlpha,
+    shortestPath: finalShortestAlpha,
     alphaPaths
   };
+
+  gCache.set(key, result);
+  return result;
 }
-
-
 
 /**
  * Helper to calculate all lineage paths with names in Arabic style (bin/binti).
  */
 export function calculateArabicLineage(individualId: string, allIndividuals: Individual[]): string[] {
-  if (!individualId || !allIndividuals || !Array.isArray(allIndividuals)) return [];
+  if (!individualId || !allIndividuals) return [];
   
   const paths: string[] = [];
-  const indMap = new Map(allIndividuals.filter(i => i && i.id).map(i => [i.id, i]));
+  const indMap = new Map(allIndividuals.map(i => [i.id, i]));
   
   function traceUp(currId: string, chainIds: string[], chainNames: string[]): void {
     const ind = indMap.get(currId);
-    if (!ind || !ind.name) return;
+    if (!ind || !ind.name || chainIds.includes(currId)) return;
 
     const newChainNames = [...chainNames, ind.name];
     const newChainIds = [...chainIds, ind.id];
 
-    // If root (no parents left) OR we hit Kiai Qomaruddin, stop and save
     if (ind.name.includes('Qomaruddin')) {
       const formattedChain = newChainNames.map((name, idx) => {
         if (idx === newChainNames.length - 1) return name;
-        
-        // Find the specific individual in this step to check gender
         const currentInd = indMap.get(newChainIds[idx]);
         const nextConnector = currentInd?.gender === 'M' ? 'bin' : 'binti';
         return `${name} ${nextConnector}`;
@@ -257,19 +320,8 @@ export function calculateArabicLineage(individualId: string, allIndividuals: Ind
       return;
     }
 
-    // Stop if it's a root that is NOT Kiai Qomaruddin
-    if (!ind.father_id && !ind.mother_id) {
-      return;
-    }
-
-    // Use ID for cycle detection to allow repeated names like "Umamah" in different generations
-    if (ind.father_id && !chainIds.includes(ind.father_id)) {
-      traceUp(ind.father_id, newChainIds, newChainNames);
-    }
-    
-    if (ind.mother_id && !chainIds.includes(ind.mother_id)) {
-      traceUp(ind.mother_id, newChainIds, newChainNames);
-    }
+    if (ind.father_id) traceUp(ind.father_id, newChainIds, newChainNames);
+    if (ind.mother_id) traceUp(ind.mother_id, newChainIds, newChainNames);
   }
 
   traceUp(individualId, [], []);
@@ -277,21 +329,12 @@ export function calculateArabicLineage(individualId: string, allIndividuals: Ind
 }
 
 /**
- * Find spouse of an individual from marriages
+ * Find spouse of an individual
  */
 export async function findSpouse(individualId: string, gender: 'M' | 'F', supabase: any) {
   if (!individualId) return null;
-  
   const column = gender === 'M' ? 'husband_id' : 'wife_id';
   const targetColumn = gender === 'M' ? 'wife_id' : 'husband_id';
-  
-  const { data, error } = await supabase
-    .from('marriages')
-    .select(targetColumn)
-    .eq(column, individualId)
-    .eq('is_active', true)
-    .limit(1);
-    
-  if (error || !data || data.length === 0) return null;
-  return data[0][targetColumn];
+  const { data } = await supabase.from('marriages').select(targetColumn).eq(column, individualId).eq('is_active', true).limit(1);
+  return data && data.length > 0 ? data[0][targetColumn] : null;
 }
