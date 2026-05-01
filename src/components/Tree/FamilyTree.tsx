@@ -36,9 +36,9 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
   const { fitView, setCenter } = useReactFlow();
 
   // 1. Memoize heavy genealogy calculations - only when data changes
-  const { levels, ranks, genDataMap, groups, childMap } = useMemo(() => {
+  const { levels, ranks, shortestPaths, genDataMap, groups, childMap } = useMemo(() => {
     console.log('Calculating genealogy data for', individuals.length, 'individuals');
-    const { levels, ranks } = calculateGenerations(individuals, marriages);
+    const { levels, ranks, shortestPaths } = calculateGenerations(individuals, marriages);
     const genDataMap = new Map<string, any>();
     const groups: Record<number, string[]> = {};
     const childMap = new Map<string, string[]>();
@@ -49,8 +49,8 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     });
 
     individuals.forEach(ind => {
-      // Use shorter path calc for tree view performance (skip Arabic)
-      genDataMap.set(ind.id, generateGenealogyIDs(ind, individuals, marriages, levels, ranks, true));
+      // Use shorter path calc for tree view performance (skipPaths: true)
+      genDataMap.set(ind.id, generateGenealogyIDs(ind, individuals, marriages, levels, ranks, shortestPaths, true));
 
       const parents = [ind.father_id, ind.mother_id].filter(Boolean) as string[];
       parents.forEach(pId => {
@@ -59,7 +59,7 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       });
     });
 
-    return { levels, ranks, genDataMap, groups, childMap };
+    return { levels, ranks, shortestPaths, genDataMap, groups, childMap };
   }, [individuals, marriages]);
 
   // 2. Build nodes and edges - runs on selection/search changes
@@ -182,7 +182,7 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
               id: ind.id,
               type: 'individual',
               data: { 
-                individual: { ...ind, ref_code: displayId, ...genData }, 
+                individual: { ...ind, ...genData }, 
                 isHighlighted,
                 isSelected,
                 isInLineage
@@ -208,7 +208,7 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
             id: ind.id,
             type: 'individual',
             data: { 
-              individual: { ...ind, ref_code: displayId, ...genData }, 
+              individual: { ...ind, ...genData }, 
               isHighlighted,
               isSelected,
               isInLineage
@@ -221,57 +221,69 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     });
 
     // 5. Edges
+    const addedEdgeIds = new Set<string>();
+    
     // Parent-Child edges
     individuals.forEach((ind) => {
       if (ind.father_id && indMap.has(ind.father_id)) {
         const edgeId = `e-f-${ind.father_id}-${ind.id}`;
-        const isLineage = highlightedEdgeIds.has(edgeId);
-        edges.push({
-          id: edgeId,
-          source: ind.father_id,
-          target: ind.id,
-          style: isLineage 
-            ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
-            : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
-          animated: isLineage,
-          zIndex: isLineage ? 10 : 1,
-        });
+        if (!addedEdgeIds.has(edgeId)) {
+          const isLineage = highlightedEdgeIds.has(edgeId);
+          edges.push({
+            id: edgeId,
+            source: ind.father_id,
+            target: ind.id,
+            style: isLineage 
+              ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
+              : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+            animated: isLineage,
+            zIndex: isLineage ? 10 : 1,
+          });
+          addedEdgeIds.add(edgeId);
+        }
       }
       if (ind.mother_id && indMap.has(ind.mother_id)) {
         const edgeId = `e-m-${ind.mother_id}-${ind.id}`;
-        const isLineage = highlightedEdgeIds.has(edgeId);
-        edges.push({
-          id: edgeId,
-          source: ind.mother_id,
-          target: ind.id,
-          style: isLineage 
-            ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
-            : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
-          animated: isLineage,
-          zIndex: isLineage ? 10 : 1,
-        });
+        if (!addedEdgeIds.has(edgeId)) {
+          const isLineage = highlightedEdgeIds.has(edgeId);
+          edges.push({
+            id: edgeId,
+            source: ind.mother_id,
+            target: ind.id,
+            style: isLineage 
+              ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
+              : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+            animated: isLineage,
+            zIndex: isLineage ? 10 : 1,
+          });
+          addedEdgeIds.add(edgeId);
+        }
       }
     });
 
     // Marriage edges
     marriages.forEach((m) => {
       if (indMap.has(m.husband_id) && indMap.has(m.wife_id)) {
-        const isInLineage = highlightedNodeIds.has(m.husband_id) && highlightedNodeIds.has(m.wife_id);
-        edges.push({
-          id: `e-mrg-${m.id}`,
-          source: m.husband_id,
-          target: m.wife_id,
-          label: '∞',
-          labelStyle: { fill: isInLineage ? '#10b981' : '#E2725B', fontWeight: 700, fontSize: 16 },
-          style: { 
-            stroke: isInLineage ? '#10b981' : '#E2725B', 
-            strokeWidth: isInLineage ? 4 : 3, 
-            strokeDasharray: '8,4', 
-            opacity: isInLineage ? 1 : 0.8 
-          },
-          animated: false,
-          zIndex: isInLineage ? 10 : 1,
-        });
+        const edgeId = `e-mrg-${m.id}`;
+        if (!addedEdgeIds.has(edgeId)) {
+          const isInLineage = highlightedNodeIds.has(m.husband_id) && highlightedNodeIds.has(m.wife_id);
+          edges.push({
+            id: edgeId,
+            source: m.husband_id,
+            target: m.wife_id,
+            label: '∞',
+            labelStyle: { fill: isInLineage ? '#10b981' : '#E2725B', fontWeight: 700, fontSize: 16 },
+            style: { 
+              stroke: isInLineage ? '#10b981' : '#E2725B', 
+              strokeWidth: isInLineage ? 4 : 3, 
+              strokeDasharray: '8,4', 
+              opacity: isInLineage ? 1 : 0.8 
+            },
+            animated: false,
+            zIndex: isInLineage ? 10 : 1,
+          });
+          addedEdgeIds.add(edgeId);
+        }
       }
     });
 

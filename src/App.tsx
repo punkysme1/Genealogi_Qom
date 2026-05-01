@@ -137,7 +137,8 @@ export default function App() {
       if (mrgError) {
         console.warn('Marriage table might not exist yet:', mrgError);
       } else if (mrgData) {
-        setMarriages(mrgData);
+        const uniqueMrgs = Array.from(new Map(mrgData.map(m => [m.id, m])).values());
+        setMarriages(uniqueMrgs);
       }
     } catch (err) {
       console.error('Error fetching data, using mock data:', err);
@@ -170,7 +171,9 @@ export default function App() {
         } catch (e) {}
 
         if (nameMatches || idMatched) {
-          results.push({ ...ind, displayId: cachedId });
+          if (!results.some(r => r.id === ind.id)) {
+            results.push({ ...ind, displayId: cachedId });
+          }
         }
       }
       setSearchResults(results);

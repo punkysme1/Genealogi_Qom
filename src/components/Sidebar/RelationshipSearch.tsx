@@ -23,15 +23,21 @@ export const RelationshipSearch: React.FC<RelationshipSearchProps> = ({
 
   const filteredA = useMemo(() => {
     if (searchA.length < 2) return [];
-    return individuals
-      .filter(i => i.name.toLowerCase().includes(searchA.toLowerCase()))
+    const matches = individuals
+      .filter(i => i.name.toLowerCase().includes(searchA.toLowerCase()));
+    
+    // Deduplicate matches
+    return Array.from(new Map(matches.map(i => [i.id, i])).values())
       .slice(0, 5);
   }, [individuals, searchA]);
 
   const filteredB = useMemo(() => {
     if (searchB.length < 2) return [];
-    return individuals
-      .filter(i => i.name.toLowerCase().includes(searchB.toLowerCase()))
+    const matches = individuals
+      .filter(i => i.name.toLowerCase().includes(searchB.toLowerCase()));
+    
+    // Deduplicate matches
+    return Array.from(new Map(matches.map(i => [i.id, i])).values())
       .slice(0, 5);
   }, [individuals, searchB]);
 

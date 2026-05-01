@@ -231,20 +231,21 @@ export function generateGenealogyIDs(
   }
   
   const level = levels[individual.id];
-  const baseId = level !== undefined ? `G${level}` : 'Outer';
+  const rank = ranks[individual.id];
+  const baseId = level !== undefined ? `G${level}${rank !== undefined ? '.' + rank : ''}` : 'Outer';
   
   // Use the pre-calculated shortest path as the primary display ID
   const bfsShortest = shortestPaths[individual.id];
-  let shortestAlpha = bfsShortest || (individual.name?.includes('Qomaruddin') ? 'G0' : 'Root');
+  let shortestAlpha = bfsShortest === '' ? 'G0' : (bfsShortest || (individual.name?.includes('Qomaruddin') ? 'G0' : 'Root'));
 
   if (skipPaths) {
     const result = {
       level,
       baseId,
       pathIds: [],
-      displayId: shortestAlpha === '' ? 'G0' : shortestAlpha,
-      shortestPath: shortestAlpha === '' ? 'G0' : shortestAlpha,
-      alphaPaths: [shortestAlpha === '' ? 'G0' : shortestAlpha]
+      displayId: shortestAlpha,
+      shortestPath: shortestAlpha,
+      alphaPaths: [shortestAlpha]
     };
     gCache.set(key, result);
     return result;

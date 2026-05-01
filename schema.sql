@@ -4,7 +4,6 @@
 CREATE TABLE individuals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
-    ref_code TEXT UNIQUE, -- Penomoran/Pengkodean
     gender CHAR(1) CHECK (gender IN ('M', 'F')),
     birth_date DATE,
     death_date DATE,

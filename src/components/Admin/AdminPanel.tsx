@@ -37,7 +37,6 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   
   const [formData, setFormData] = useState<Partial<Individual>>({
     name: '',
-    ref_code: '',
     gender: 'M',
     birth_date: '',
     death_date: '',
@@ -79,7 +78,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
 
   const fetchAllMarriages = async () => {
     const { data } = await supabase.from('marriages').select('*');
-    if (data) setAllMarriages(data);
+    if (data) {
+      const uniqueData = Array.from(new Map(data.map(m => [m.id, m])).values());
+      setAllMarriages(uniqueData);
+    }
   };
 
   const fetchEvents = async (id: string) => {
@@ -112,7 +114,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
         wife:individuals!marriages_wife_id_fkey(name)
       `)
       .or(`husband_id.eq.${id},wife_id.eq.${id}`);
-    if (data) setMarriages(data);
+    if (data) {
+      const uniqueMarriages = Array.from(new Map(data.map(m => [m.id, m])).values());
+      setMarriages(uniqueMarriages);
+    }
   };
 
   useEffect(() => {
@@ -195,7 +200,6 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     const isMale = formData.gender === 'M';
     setFormData({
       name: '',
-      ref_code: '',
       gender: 'M',
       birth_date: '',
       death_date: '',
@@ -277,20 +281,15 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
         displayId, 
         shortestPath, 
         alphaPaths,
+        genData,
         ...cleanData 
       } = formData as any;
       
-      // Automatic Alphanumeric Numbering for NEW individuals (Temporary placeholder - will be recalculated by generator)
-      if (!editingId && (!cleanData.ref_code || cleanData.ref_code === '')) {
-        cleanData.ref_code = 'ID_PENDING';
-      }
-
       if (cleanData.father_id === '') cleanData.father_id = null;
       if (cleanData.mother_id === '') cleanData.mother_id = null;
       if (cleanData.birth_date === '') cleanData.birth_date = null;
       if (cleanData.death_date === '') cleanData.death_date = null;
       if (cleanData.verified_by === '') cleanData.verified_by = null;
-      if (cleanData.ref_code === '') cleanData.ref_code = null;
       if (cleanData.is_alive === undefined) cleanData.is_alive = true;
       if (cleanData.birth_place === '') cleanData.birth_place = null;
       if (cleanData.death_place === '') cleanData.death_place = null;
@@ -330,7 +329,6 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   const handleAddNew = () => {
     setFormData({
       name: '',
-      ref_code: '',
       gender: 'M',
       birth_date: '',
       death_date: '',
@@ -468,7 +466,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                     >
                       <option value="">-- Pilih Ayah --</option>
                       {allIndividuals.filter(i => i.gender === 'M' && i.id !== editingId).map(i => (
-                        <option key={i.id} value={i.id}>{i.name} ({i.ref_code || '?'})</option>
+                        <option key={i.id} value={i.id}>{i.name}</option>
                       ))}
                     </select>
                   </div>
@@ -481,7 +479,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                     >
                       <option value="">-- Pilih Ibu --</option>
                       {allIndividuals.filter(i => i.gender === 'F' && i.id !== editingId).map(i => (
-                        <option key={i.id} value={i.id}>{i.name} ({i.ref_code || '?'})</option>
+                        <option key={i.id} value={i.id}>{i.name}</option>
                       ))}
                     </select>
                   </div>
@@ -545,9 +543,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-ink-light mb-1.5">Kode Alfanumerik (Auto)</label>
-                    <div className="px-4 py-2.5 bg-bg border border-dashed border-border-olive rounded-lg text-sm text-ink-light italic">
-                      {formData.ref_code || 'Otomatis dihitung sistem'}
+                    <label className="block text-xs font-bold text-ink-light mb-1.5 underline decoration-accent-tan underline-offset-4">Alfanumerik / Kode Generasi (Auto)</label>
+                    <div className="px-4 py-2.5 bg-bg border border-dashed border-border-olive rounded-lg text-sm text-ink-light italic flex gap-2">
+                       <span className="font-bold text-primary-olive">{(formData as any).genData?.displayId || '?'}</span>
+                       <span className="opacity-50">{(formData as any).genData?.baseId || '?'}</span>
                     </div>
                   </div>
                 </div>

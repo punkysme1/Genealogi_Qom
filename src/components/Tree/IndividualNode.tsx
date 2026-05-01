@@ -55,16 +55,28 @@ const IndividualNode = memo(({ data }: IndividualNodeProps) => {
           )}
         </div>
         
-        <div className="flex flex-col gap-0.5 mt-1">
-          {individual.ref_code && (
-            <p className="text-[9px] font-bold text-primary-olive uppercase leading-tight flex flex-wrap items-center gap-1">
-              {individual.ref_code} 
-              <span className="text-ink-light font-medium normal-case tracking-tight">
-                ({individual.ref_code.startsWith('G') ? 'Generasi terdekat ke Qomaruddin' : 'Kode Referensi'})
-              </span>
-            </p>
+      <div className="flex flex-col gap-0.5 mt-1">
+          {individual.id && (
+            <div className="text-[9px] leading-tight flex flex-col gap-0.5">
+              <div className="flex items-center gap-1">
+                <span className="font-bold text-primary-olive uppercase bg-primary-olive/5 px-1 rounded border border-primary-olive/10">
+                  {(individual as any).displayId}
+                </span>
+                <span className="text-ink-light font-medium text-[8px]">
+                  (Alfanumerik)
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="font-bold text-ink-light bg-bg px-1 rounded border border-border-olive/50">
+                  {(individual as any).baseId}
+                </span>
+                <span className="text-ink-light font-medium text-[8px]">
+                  (Kode Generasi)
+                </span>
+              </div>
+            </div>
           )}
-          <p className="text-[10px] text-ink-light font-bold flex items-center gap-1 truncate">
+          <p className="text-[10px] text-ink-light font-bold flex items-center gap-1 truncate mt-1">
             Status {(individual.is_alive === false || individual.death_date) ? 'Sudah Wafat' : 'Masih Hidup'}
             <span className="opacity-30">-</span>
             <span className="truncate italic font-medium">({individual.current_location || individual.death_place || '?'})</span>

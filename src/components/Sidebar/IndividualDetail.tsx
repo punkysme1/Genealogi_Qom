@@ -70,7 +70,9 @@ export default function IndividualDetail({
   const spousesWithMarriage = useMemo(() => {
     if (!individual) return [];
     const spouseMarriages = marriages.filter(m => m?.husband_id === individual.id || m?.wife_id === individual.id);
-    return spouseMarriages.map(m => {
+    const uniqueMarriages = Array.from(new Map(spouseMarriages.map(m => [m.id, m])).values());
+    
+    return uniqueMarriages.map(m => {
       const spouseId = m?.husband_id === individual.id ? m?.wife_id : m?.husband_id;
       const spouse = individuals.find(i => i?.id === spouseId);
       return { spouse, marriage: m };
@@ -79,9 +81,14 @@ export default function IndividualDetail({
 
   const children = useMemo(() => {
     if (!individual) return [];
-    return individuals
-      .filter(child => child?.father_id === individual.id || child?.mother_id === individual.id)
-      .sort((a, b) => {
+    
+    const childList = individuals
+      .filter(child => child?.father_id === individual.id || child?.mother_id === individual.id);
+    
+    // Ensure unique children by ID
+    const uniqueChildren = Array.from(new Map(childList.map(c => [c.id, c])).values());
+    
+    return uniqueChildren.sort((a, b) => {
         const dateA = a?.birth_date || '9999-12-31';
         const dateB = b?.birth_date || '9999-12-31';
         const nameA = a?.name || '';
@@ -102,7 +109,8 @@ export default function IndividualDetail({
         console.warn('Events table mismatch or missing:', error.message);
         setEvents([]);
       } else {
-        setEvents(data || []);
+        const uniqueEvents = Array.from(new Map((data || []).map(e => [e.id, e])).values());
+        setEvents(uniqueEvents);
       }
     } catch (err) {
       setEvents([]);
