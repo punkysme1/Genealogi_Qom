@@ -75,7 +75,9 @@ export default function IndividualDetail({
     displayId, 
     shortestPath, 
     alphaPaths
-  } = generateGenealogyIDs(individual, individuals, marriages);
+  } = React.useMemo(() => {
+    return generateGenealogyIDs(individual, individuals, marriages);
+  }, [individual?.id, individuals, marriages]);
 
   const father = individuals.find(i => i?.id === individual.father_id);
   const mother = individuals.find(i => i?.id === individual.mother_id);

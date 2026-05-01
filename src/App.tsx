@@ -97,6 +97,32 @@ export default function App() {
   const [selectedLoc, setSelectedLoc] = useState<string | null>(null);
   const [lifeStatusFilter, setLifeStatusFilter] = useState<'all' | 'alive' | 'deceased'>('all');
   const [verificationFilter, setVerificationFilter] = useState<'all' | 'verified' | 'unverified'>('all');
+  
+  // Pre-calculate genealogy data once to prevent expensive re-calculates
+  const enrichedIndividuals = React.useMemo(() => {
+    if (!individuals || individuals.length === 0) return [];
+    
+    // We calculate this once for the whole set
+    const { levels, ranks } = calculateGenerations(individuals);
+    
+    return individuals.map(ind => {
+      // Small optimization: only generate displayId for now as it's the primary ref
+      // We'll calculate Arabic lineage only when detail is opened
+      try {
+        const level = levels[ind.id];
+        const rank = ranks[ind.id];
+        const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+        return { 
+          ...ind, 
+          displayId,
+          baseId: level !== undefined ? `G${level}.${rank}` : 'Outer'
+        };
+      } catch (e) {
+        return { ...ind, displayId: '?', baseId: '-' };
+      }
+    });
+  }, [individuals, marriages]);
+
   const [searchResults, setSearchResults] = useState<(Individual & { displayId: string })[]>([]);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
@@ -142,33 +168,23 @@ export default function App() {
     if (query.length > 1) {
       const results: (Individual & { displayId: string })[] = [];
       
-      const pool = individuals || [];
+      const pool = enrichedIndividuals || [];
       for (const ind of pool) {
         if (!ind || !ind.name) continue;
         if (results.length >= 30) break;
 
         const nameMatches = ind.name.toLowerCase().includes(query);
-        let idMatched = false;
-        let cachedId = '';
+        const idMatches = (ind as any).displayId?.toLowerCase().includes(query);
 
-        // Hanya hitung ID jika nama tidak cocok, ATAU jika kita memang butuh ID untuk ditampilkan
-        try {
-          const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
-          cachedId = displayId;
-          if (!nameMatches && displayId.toLowerCase().includes(query)) {
-            idMatched = true;
-          }
-        } catch (e) {}
-
-        if (nameMatches || idMatched) {
-          results.push({ ...ind, displayId: cachedId });
+        if (nameMatches || idMatches) {
+          results.push(ind as any);
         }
       }
       setSearchResults(results);
     } else {
       setSearchResults([]);
     }
-  }, [debouncedSearchQuery, individuals, marriages]);
+  }, [debouncedSearchQuery, enrichedIndividuals]);
 
   useEffect(() => {
     fetchData();
@@ -356,14 +372,14 @@ export default function App() {
                         <div className="min-w-0 flex-1 pr-2">
                           <p className="text-[12px] font-bold text-ink truncate group-hover:text-primary-olive">{ind.name || 'Tanpa Nama'}</p>
                           <p className="text-[10px] text-ink-light truncate italic">
-                            {ind.father_id ? `bin ${(individuals || []).find(p => p?.id === ind.father_id)?.name || '???'}` : 
-                             ind.mother_id ? `binti ${(individuals || []).find(p => p?.id === ind.mother_id)?.name || '???'}` : 
+                            {ind.father_id ? `bin ${enrichedIndividuals.find(p => p?.id === ind.father_id)?.name || '???'}` : 
+                             ind.mother_id ? `binti ${enrichedIndividuals.find(p => p?.id === ind.mother_id)?.name || '???'}` : 
                              'Root'}
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
                           <span className="text-[9px] font-mono font-bold bg-accent-tan/20 text-primary-olive px-1.5 py-0.5 rounded border border-accent-tan/30 leading-none">
-                            {ind.displayId}
+                            {(ind as any).displayId}
                           </span>
                         </div>
                       </button>
@@ -721,7 +737,7 @@ export default function App() {
         {/* Tree Viewport */}
         <div className="flex-1 relative h-full">
           <FamilyTree 
-            individuals={individuals} 
+            individuals={enrichedIndividuals as any} 
             marriages={marriages}
             onSelectIndividual={setSelectedIndividual}
             searchQuery={searchQuery}

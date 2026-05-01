@@ -143,26 +143,16 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       // Sort individuals by their parent's birth date group, then by their own birth date
       // We reverse the logic to achieve a right-to-left feel (Oldest on the right)
       levelIds.sort((a, b) => {
-        const indA = indMap.get(a)!;
-        const indB = indMap.get(b)!;
+        const indA = indMap.get(a)! as any;
+        const indB = indMap.get(b)! as any;
         
-        const pA = indA.father_id || indA.mother_id;
-        const pB = indB.father_id || indB.mother_id;
+        // Use the pre-calculated displayId for much more reliable sorting
+        // We ensure a stable sort by using the display ID
+        const idA = indA.displayId || '';
+        const idB = indB.displayId || '';
         
-        // Use the generated nasab IDs for much more reliable sorting (respecting birth order)
-        // We pre-calculate or calculate on-the-fly; for a single level it's manageable.
-        try {
-          const { displayId: idA } = generateGenealogyIDs(indA, individuals, marriages);
-          const { displayId: idB } = generateGenealogyIDs(indB, individuals, marriages);
-          
-          // If they have the same parent, or same prefix, sort by ID descending (R-to-L)
-          // This ensures that '1' (Oldest) is on the right of '2', '3', etc.
-          if (idA !== idB) {
-            return idB.localeCompare(idA);
-          }
-        } catch (e) {
-          // Fallback to name if ID generation fails
-          return indB.name.localeCompare(indA.name);
+        if (idA !== idB) {
+          return idB.localeCompare(idA);
         }
 
         return 0;
@@ -196,10 +186,10 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         if (unit.length === 2) {
           // Couple
           unit.forEach((id, idx) => {
-            const ind = indMap.get(id);
+            const ind = indMap.get(id) as any;
             if (!ind) return;
             const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
-            const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+            const displayId = ind.displayId || '?';
             const isSelected = selectedIndividualId === ind.id;
             const isInLineage = highlightedNodeIds.has(ind.id);
 
@@ -221,10 +211,10 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
           currentX += (2 * NODE_WIDTH) + SPOUSE_GAP + HORIZONTAL_GAP;
         } else if (unit.length === 1) {
           // Single
-          const ind = indMap.get(unit[0]);
+          const ind = indMap.get(unit[0]) as any;
           if (!ind) return;
           const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
-          const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+          const displayId = ind.displayId || '?';
           const isSelected = selectedIndividualId === ind.id;
           const isInLineage = highlightedNodeIds.has(ind.id);
 
