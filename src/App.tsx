@@ -101,6 +101,12 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<(Individual & { displayId: string })[]>([]);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
+  // Memoize levels and ranks to avoid redundant heavy calculations
+  const genMetadata = React.useMemo(() => {
+    if (!individuals.length) return { levels: {}, ranks: {} };
+    return calculateGenerations(individuals);
+  }, [individuals]);
+
   // Debounce search query
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -144,6 +150,8 @@ export default function App() {
       const results: (Individual & { displayId: string })[] = [];
       
       const pool = individuals || [];
+      const { levels, ranks } = genMetadata;
+
       for (const ind of pool) {
         if (!ind || !ind.name) continue;
         if (results.length >= 30) break;
@@ -153,7 +161,8 @@ export default function App() {
         let cachedId = '';
 
         try {
-          const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+          // Pass pre-calculated metadata!
+          const { displayId } = generateGenealogyIDs(ind, individuals, marriages, levels, ranks, true);
           cachedId = displayId;
           if (!nameMatches && displayId.toLowerCase().includes(query)) {
             idMatched = true;
@@ -168,7 +177,7 @@ export default function App() {
     } else {
       setSearchResults([]);
     }
-  }, [debouncedSearchQuery, individuals, marriages]);
+  }, [debouncedSearchQuery, individuals, marriages, genMetadata]);
 
   useEffect(() => {
     fetchData();
@@ -214,7 +223,7 @@ export default function App() {
 
     if (!individuals.length) return { sortedLocs: [], sortedGens: [], lastUpdate: null, verifiedCount: 0, unverifiedCount: 0, aliveCount: 0, deceasedCount: 0 };
 
-    const { levels } = calculateGenerations(individuals);
+    const { levels } = genMetadata;
 
     individuals.forEach(ind => {
       // Verified status
@@ -262,7 +271,7 @@ export default function App() {
   const filteredIndividualsByGen = React.useMemo(() => {
     if (selectedGen === null && selectedLoc === null && lifeStatusFilter === 'all' && verificationFilter === 'all') return [];
     
-    const { levels } = calculateGenerations(individuals);
+    const { levels } = genMetadata;
     let filtered = [...individuals];
 
     if (selectedGen !== null) {

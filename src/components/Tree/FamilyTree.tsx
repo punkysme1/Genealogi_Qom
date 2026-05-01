@@ -17,7 +17,7 @@ import '@xyflow/react/dist/style.css';
 
 import IndividualNode from './IndividualNode';
 import { Individual, Marriage } from '@/types';
-import { generateGenealogyIDs } from '@/lib/genealogy';
+import { generateGenealogyIDs, calculateGenerations } from '@/lib/genealogy';
 
 const nodeTypes = {
   individual: IndividualNode,
@@ -35,65 +35,46 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
   console.log('FamilyTreeContent rendering with', individuals.length, 'individuals');
   const { fitView, setCenter } = useReactFlow();
 
-  // Enhanced hierarchical layout logic
-  const { initialNodes, initialEdges } = useMemo(() => {
-    if (individuals.length === 0) return { initialNodes: [], initialEdges: [] };
-
-    const nodes: Node[] = [];
-    const edges: Edge[] = [];
-    const indMap = new Map(individuals.map(i => [i.id, i]));
-    
-    // 1. Assign generations (levels) - Improved robust logic
-    const levels: Record<string, number> = {};
-    
-    // Initialize all to 0
-    individuals.forEach(i => levels[i.id] = 0);
-
-    // Iteratively resolve levels (handles complex marriages and lineage)
-    let changed = true;
-    let iterations = 0;
-    while (changed && iterations < 50) {
-      changed = false;
-      iterations++;
-      
-      // Pass 1: Pedigree depth
-      individuals.forEach(ind => {
-        let maxParentLevel = -1;
-        if (ind.father_id && indMap.has(ind.father_id)) maxParentLevel = Math.max(maxParentLevel, levels[ind.father_id]);
-        if (ind.mother_id && indMap.has(ind.mother_id)) maxParentLevel = Math.max(maxParentLevel, levels[ind.mother_id]);
-        
-        const targetLevel = maxParentLevel + 1;
-        if (levels[ind.id] < targetLevel) {
-          levels[ind.id] = targetLevel;
-          changed = true;
-        }
-      });
-      
-      // Pass 2: Sync Spouses (Marriages should be on the same level)
-      marriages.forEach(m => {
-        const hL = levels[m.husband_id];
-        const wL = levels[m.wife_id];
-        if (hL !== undefined && wL !== undefined && hL !== wL) {
-          const maxL = Math.max(hL, wL);
-          levels[m.husband_id] = maxL;
-          levels[m.wife_id] = maxL;
-          changed = true;
-        }
-      });
-    }
-
-    // 2. Group by level and prepare layout units (couples/singles)
+  // 1. Memoize heavy genealogy calculations - only when data changes
+  const { levels, ranks, genDataMap, groups, childMap } = useMemo(() => {
+    console.log('Calculating genealogy data for', individuals.length, 'individuals');
+    const { levels, ranks } = calculateGenerations(individuals);
+    const genDataMap = new Map<string, any>();
     const groups: Record<number, string[]> = {};
+    const childMap = new Map<string, string[]>();
+
     Object.entries(levels).forEach(([id, level]) => {
       if (!groups[level]) groups[level] = [];
       groups[level].push(id);
     });
 
-    // Strategy: For each level, group spouses together so they appear side-by-side
+    individuals.forEach(ind => {
+      // Use shorter path calc for tree view performance (skip Arabic)
+      genDataMap.set(ind.id, generateGenealogyIDs(ind, individuals, marriages, levels, ranks, true));
+
+      const parents = [ind.father_id, ind.mother_id].filter(Boolean) as string[];
+      parents.forEach(pId => {
+        if (!childMap.has(pId)) childMap.set(pId, []);
+        if (!childMap.get(pId)!.includes(ind.id)) childMap.get(pId)!.push(ind.id);
+      });
+    });
+
+    return { levels, ranks, genDataMap, groups, childMap };
+  }, [individuals, marriages]);
+
+  // 2. Build nodes and edges - runs on selection/search changes
+  const { initialNodes, initialEdges } = useMemo(() => {
+    if (individuals.length === 0 || !levels) return { initialNodes: [], initialEdges: [] };
+
+    const nodes: Node[] = [];
+    const edges: Edge[] = [];
+    const indMap = new Map(individuals.map(i => [i.id, i]));
+    
+    // Constants for layout
     const NODE_WIDTH = 240; 
     const HORIZONTAL_GAP = 140; 
     const VERTICAL_GAP = 400; 
-    const SPOUSE_GAP = 40; // Smaller gap for spouses
+    const SPOUSE_GAP = 40; 
 
     // 4. Highlight Logic
     const highlightedNodeIds = new Set<string>();
@@ -102,12 +83,11 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     if (selectedIndividualId) {
       highlightedNodeIds.add(selectedIndividualId);
       
-      // Ancestors with cycle protection
+      // Ancestors
       const ancestorVisited = new Set<string>();
       const findAncestors = (id: string) => {
         if (ancestorVisited.has(id)) return;
         ancestorVisited.add(id);
-        
         const ind = indMap.get(id);
         if (!ind) return;
         if (ind.father_id && indMap.has(ind.father_id)) {
@@ -123,18 +103,16 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       };
       findAncestors(selectedIndividualId);
 
-      // Descendants with cycle protection
+      // Descendants - Optimized with childMap
       const descendantVisited = new Set<string>();
       const findDescendants = (id: string) => {
         if (descendantVisited.has(id)) return;
         descendantVisited.add(id);
-        
-        individuals.forEach(ind => {
-          if (ind.father_id === id || ind.mother_id === id) {
-            highlightedNodeIds.add(ind.id);
-            highlightedEdgeIds.add(ind.father_id === id ? `e-f-${id}-${ind.id}` : `e-m-${id}-${ind.id}`);
-            findDescendants(ind.id);
-          }
+        const children = childMap.get(id) || [];
+        children.forEach(childId => {
+          highlightedNodeIds.add(childId);
+          highlightedEdgeIds.add(indMap.get(childId)?.father_id === id ? `e-f-${id}-${childId}` : `e-m-${id}-${childId}`);
+          findDescendants(childId);
         });
       };
       findDescendants(selectedIndividualId);
@@ -151,13 +129,11 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       // Sort individuals by their parent's birth date group, then by their own birth date
       // We reverse the logic to achieve a right-to-left feel (Oldest on the right)
       levelIds.sort((a, b) => {
-        const indA = indMap.get(a)! as any;
-        const indB = indMap.get(b)! as any;
+        const genA = genDataMap.get(a)!;
+        const genB = genDataMap.get(b)!;
         
-        // Use the pre-calculated displayId for much more reliable sorting
-        // We ensure a stable sort by using the display ID
-        const idA = indA.displayId || '';
-        const idB = indB.displayId || '';
+        const idA = genA.displayId || '';
+        const idB = genB.displayId || '';
         
         if (idA !== idB) {
           return idB.localeCompare(idA);
@@ -194,10 +170,11 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         if (unit.length === 2) {
           // Couple
           unit.forEach((id, idx) => {
-            const ind = indMap.get(id) as any;
-            if (!ind) return;
+            const ind = indMap.get(id)!;
+            const genData = genDataMap.get(id);
+            const displayId = genData?.displayId || '?';
+
             const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
-            const displayId = ind.displayId || '?';
             const isSelected = selectedIndividualId === ind.id;
             const isInLineage = highlightedNodeIds.has(ind.id);
 
@@ -205,7 +182,7 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
               id: ind.id,
               type: 'individual',
               data: { 
-                individual: { ...ind, ref_code: displayId }, 
+                individual: { ...ind, ref_code: displayId, ...genData }, 
                 isHighlighted,
                 isSelected,
                 isInLineage
@@ -219,10 +196,11 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
           currentX += (2 * NODE_WIDTH) + SPOUSE_GAP + HORIZONTAL_GAP;
         } else if (unit.length === 1) {
           // Single
-          const ind = indMap.get(unit[0]) as any;
-          if (!ind) return;
+          const ind = indMap.get(unit[0])!;
+          const genData = genDataMap.get(unit[0]);
+          const displayId = genData?.displayId || '?';
+
           const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
-          const displayId = ind.displayId || '?';
           const isSelected = selectedIndividualId === ind.id;
           const isInLineage = highlightedNodeIds.has(ind.id);
 
@@ -230,7 +208,7 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
             id: ind.id,
             type: 'individual',
             data: { 
-              individual: { ...ind, ref_code: displayId }, 
+              individual: { ...ind, ref_code: displayId, ...genData }, 
               isHighlighted,
               isSelected,
               isInLineage
