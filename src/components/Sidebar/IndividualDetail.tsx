@@ -48,6 +48,31 @@ export default function IndividualDetail({
     }
   }, [individual?.id]);
 
+  const { 
+    baseId, 
+    pathIds, 
+    displayId, 
+    shortestPath, 
+    alphaPaths
+  } = React.useMemo(() => {
+    if (!individual) {
+      return { baseId: '-', pathIds: [], displayId: '-', shortestPath: '', alphaPaths: [] };
+    }
+    // Optimization: if displayId already exists on individual, use it for baseId/displayId
+    // and only calculate the complex paths
+    const preCalculatedId = (individual as any).displayId;
+    const preCalculatedBase = (individual as any).baseId;
+    
+    const results = generateGenealogyIDs(individual, individuals, marriages);
+    
+    return {
+      ...results,
+      displayId: preCalculatedId || results.displayId,
+      baseId: preCalculatedBase || results.baseId,
+      shortestPath: preCalculatedId || results.shortestPath
+    };
+  }, [individual?.id, individuals, marriages]);
+
   const fetchEvents = async (id: string) => {
     try {
       const { data, error } = await supabase
@@ -68,16 +93,6 @@ export default function IndividualDetail({
   };
 
   if (!individual) return null;
-
-  const { 
-    baseId, 
-    pathIds, 
-    displayId, 
-    shortestPath, 
-    alphaPaths
-  } = React.useMemo(() => {
-    return generateGenealogyIDs(individual, individuals, marriages);
-  }, [individual?.id, individuals, marriages]);
 
   const father = individuals.find(i => i?.id === individual.father_id);
   const mother = individuals.find(i => i?.id === individual.mother_id);

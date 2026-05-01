@@ -102,8 +102,12 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     if (selectedIndividualId) {
       highlightedNodeIds.add(selectedIndividualId);
       
-      // Ancestors
+      // Ancestors with cycle protection
+      const ancestorVisited = new Set<string>();
       const findAncestors = (id: string) => {
+        if (ancestorVisited.has(id)) return;
+        ancestorVisited.add(id);
+        
         const ind = indMap.get(id);
         if (!ind) return;
         if (ind.father_id && indMap.has(ind.father_id)) {
@@ -119,8 +123,12 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       };
       findAncestors(selectedIndividualId);
 
-      // Descendants
+      // Descendants with cycle protection
+      const descendantVisited = new Set<string>();
       const findDescendants = (id: string) => {
+        if (descendantVisited.has(id)) return;
+        descendantVisited.add(id);
+        
         individuals.forEach(ind => {
           if (ind.father_id === id || ind.mother_id === id) {
             highlightedNodeIds.add(ind.id);

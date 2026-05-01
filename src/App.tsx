@@ -773,8 +773,8 @@ export default function App() {
 
       {/* Sidebar Detail */}
       <IndividualDetail 
-        individual={selectedIndividual} 
-        individuals={individuals}
+        individual={selectedIndividual ? (enrichedIndividuals.find(i => i.id === selectedIndividual.id) as any || selectedIndividual) : null} 
+        individuals={enrichedIndividuals as any}
         marriages={marriages}
         onClose={() => setSelectedIndividual(null)}
         isAdmin={!!user}
