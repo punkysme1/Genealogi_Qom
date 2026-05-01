@@ -98,34 +98,6 @@ export default function App() {
   const [lifeStatusFilter, setLifeStatusFilter] = useState<'all' | 'alive' | 'deceased'>('all');
   const [verificationFilter, setVerificationFilter] = useState<'all' | 'verified' | 'unverified'>('all');
   
-  // Pre-calculate genealogy data once to prevent expensive re-calculates
-  const enrichedIndividuals = React.useMemo(() => {
-    if (!individuals || individuals.length === 0) return [];
-    
-    // Calculate global generations once
-    const { levels, ranks } = calculateGenerations(individuals);
-    
-    // Map individuals and only calculate displayId (nasab code) for now
-    // Fully detailed Arabic lineage is calculated on-demand in Detail view
-    return individuals.map(ind => {
-      try {
-        const level = levels[ind.id];
-        const rank = ranks[ind.id];
-        
-        // Use optimized call that avoids nested calculateGenerations and skips heavy Arabic lineage tracing
-        const { displayId } = generateGenealogyIDs(ind, individuals, marriages, levels, ranks, true);
-        
-        return { 
-          ...ind, 
-          displayId,
-          baseId: level !== undefined ? `G${level}.${rank}` : 'Outer'
-        };
-      } catch (e) {
-        return { ...ind, displayId: '?', baseId: '-' };
-      }
-    });
-  }, [individuals, marriages]);
-
   const [searchResults, setSearchResults] = useState<(Individual & { displayId: string })[]>([]);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
@@ -171,23 +143,32 @@ export default function App() {
     if (query.length > 1) {
       const results: (Individual & { displayId: string })[] = [];
       
-      const pool = enrichedIndividuals || [];
+      const pool = individuals || [];
       for (const ind of pool) {
         if (!ind || !ind.name) continue;
         if (results.length >= 30) break;
 
         const nameMatches = ind.name.toLowerCase().includes(query);
-        const idMatches = (ind as any).displayId?.toLowerCase().includes(query);
+        let idMatched = false;
+        let cachedId = '';
 
-        if (nameMatches || idMatches) {
-          results.push(ind as any);
+        try {
+          const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+          cachedId = displayId;
+          if (!nameMatches && displayId.toLowerCase().includes(query)) {
+            idMatched = true;
+          }
+        } catch (e) {}
+
+        if (nameMatches || idMatched) {
+          results.push({ ...ind, displayId: cachedId });
         }
       }
       setSearchResults(results);
     } else {
       setSearchResults([]);
     }
-  }, [debouncedSearchQuery, enrichedIndividuals]);
+  }, [debouncedSearchQuery, individuals, marriages]);
 
   useEffect(() => {
     fetchData();
@@ -375,14 +356,14 @@ export default function App() {
                         <div className="min-w-0 flex-1 pr-2">
                           <p className="text-[12px] font-bold text-ink truncate group-hover:text-primary-olive">{ind.name || 'Tanpa Nama'}</p>
                           <p className="text-[10px] text-ink-light truncate italic">
-                            {ind.father_id ? `bin ${enrichedIndividuals.find(p => p?.id === ind.father_id)?.name || '???'}` : 
-                             ind.mother_id ? `binti ${enrichedIndividuals.find(p => p?.id === ind.mother_id)?.name || '???'}` : 
+                            {ind.father_id ? `bin ${individuals.find(p => p?.id === ind.father_id)?.name || '???'}` : 
+                             ind.mother_id ? `binti ${individuals.find(p => p?.id === ind.mother_id)?.name || '???'}` : 
                              'Root'}
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
                           <span className="text-[9px] font-mono font-bold bg-accent-tan/20 text-primary-olive px-1.5 py-0.5 rounded border border-accent-tan/30 leading-none">
-                            {(ind as any).displayId}
+                            {ind.displayId}
                           </span>
                         </div>
                       </button>
@@ -469,8 +450,8 @@ export default function App() {
                         <div className="text-left flex-1 min-w-0 pr-4">
                           <p className="text-[14px] font-bold text-ink truncate">{ind.name || 'Tanpa Nama'}</p>
                           <p className="text-[11px] text-ink-light italic truncate">
-                             {ind.father_id ? `bin ${(individuals || []).find(p => p?.id === ind.father_id)?.name || '???'}` : 
-                              ind.mother_id ? `binti ${(individuals || []).find(p => p?.id === ind.mother_id)?.name || '???'}` : 
+                             {ind.father_id ? `bin ${individuals.find(p => p?.id === ind.father_id)?.name || '???'}` : 
+                              ind.mother_id ? `binti ${individuals.find(p => p?.id === ind.mother_id)?.name || '???'}` : 
                               'Root'}
                           </p>
                         </div>
@@ -740,7 +721,7 @@ export default function App() {
         {/* Tree Viewport */}
         <div className="flex-1 relative h-full">
           <FamilyTree 
-            individuals={enrichedIndividuals as any} 
+            individuals={individuals} 
             marriages={marriages}
             onSelectIndividual={setSelectedIndividual}
             searchQuery={searchQuery}
@@ -773,8 +754,8 @@ export default function App() {
 
       {/* Sidebar Detail */}
       <IndividualDetail 
-        individual={selectedIndividual ? (enrichedIndividuals.find(i => i.id === selectedIndividual.id) as any || selectedIndividual) : null} 
-        individuals={enrichedIndividuals as any}
+        individual={selectedIndividual} 
+        individuals={individuals}
         marriages={marriages}
         onClose={() => setSelectedIndividual(null)}
         isAdmin={!!user}

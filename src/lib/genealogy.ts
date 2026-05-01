@@ -62,18 +62,21 @@ export function calculateGenerations(allIndividuals: Individual[]) {
     }
   });
 
-  // BFS
+  // BFS with basic cycle detection
   const queue: { id: string, level: number }[] = [{ id: root.id, level: 0 }];
   levels[root.id] = 0;
+  const visited = new Set<string>();
 
   while (queue.length > 0) {
     const current = queue.shift();
-    if (!current) continue;
+    if (!current || visited.has(current.id)) continue;
     const { id, level } = current;
+    visited.add(id);
     
     const childrenIds = childMap.get(id) || [];
     childrenIds.forEach(childId => {
-      if (levels[childId] === undefined || levels[childId] > level + 1) {
+      // Safety: Prevent excessive levels
+      if (level < 100 && (levels[childId] === undefined || levels[childId] > level + 1)) {
         levels[childId] = level + 1;
         queue.push({ id: childId, level: level + 1 });
       }
@@ -106,6 +109,7 @@ export function calculateGenerations(allIndividuals: Individual[]) {
 
 /**
  * Calculates all possible lineage paths for an individual.
+ * Hardened against infinite recursion.
  */
 export function calculatePathIDs(individualId: string, allIndividuals: Individual[]): string[] {
   if (!individualId || !allIndividuals || allIndividuals.length === 0) return [];
@@ -122,10 +126,8 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
   allIndividuals.forEach(ind => {
     const parents = [ind.father_id, ind.mother_id].filter(Boolean) as string[];
     parents.forEach(pId => {
-      const existing = childMap.get(pId) || [];
-      if (!existing.includes(ind.id)) {
-        childMap.set(pId, [...existing, ind.id]);
-      }
+      if (!childMap.has(pId)) childMap.set(pId, []);
+      if (!childMap.get(pId)!.includes(ind.id)) childMap.get(pId)!.push(ind.id);
     });
   });
 
@@ -141,18 +143,24 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
   });
 
   function findPaths(currentId: string, currentPath: string, visited: Set<string>) {
+    if (visited.has(currentId)) return; // Cycle protection
+    
     if (currentId === individualId) {
       paths.push(currentPath || 'G0');
       return;
     }
 
-    if (visited.has(currentId)) return; 
     const children = childMap.get(currentId) || [];
     if (children.length === 0) return;
 
-    visited.add(currentId);
+    const newVisited = new Set(visited);
+    newVisited.add(currentId);
+
+    // Limit path branching to avoid performance explosion
+    if (paths.length > 50) return;
+
     children.forEach((childId, index) => {
-      findPaths(childId, `${currentPath}${toAlphaNumeric(index + 1)}`, new Set(visited));
+      findPaths(childId, `${currentPath}${toAlphaNumeric(index + 1)}`, newVisited);
     });
   }
 

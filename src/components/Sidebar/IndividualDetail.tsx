@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Individual, Marriage, Event } from '@/types';
 import { getJavaneseDescendantTerm } from '@/lib/relationships';
 import { generateGenealogyIDs } from '@/lib/genealogy';
@@ -54,24 +54,40 @@ export default function IndividualDetail({
     displayId, 
     shortestPath, 
     alphaPaths
-  } = React.useMemo(() => {
+  } = useMemo(() => {
     if (!individual) {
       return { baseId: '-', pathIds: [], displayId: '-', shortestPath: '', alphaPaths: [] };
     }
-    // Optimization: if displayId already exists on individual, use it for baseId/displayId
-    // and only calculate the complex paths
-    const preCalculatedId = (individual as any).displayId;
-    const preCalculatedBase = (individual as any).baseId;
     
-    const results = generateGenealogyIDs(individual, individuals, marriages);
-    
-    return {
-      ...results,
-      displayId: preCalculatedId || results.displayId,
-      baseId: preCalculatedBase || results.baseId,
-      shortestPath: preCalculatedId || results.shortestPath
-    };
+    return generateGenealogyIDs(individual, individuals, marriages);
   }, [individual?.id, individuals, marriages]);
+
+  // These calculations depend on individual, but we move them after useMemo to keep hooks at top
+  const father = useMemo(() => individuals.find(i => i?.id === individual?.father_id), [individual?.father_id, individuals]);
+  const mother = useMemo(() => individuals.find(i => i?.id === individual?.mother_id), [individual?.mother_id, individuals]);
+  
+  const spousesWithMarriage = useMemo(() => {
+    if (!individual) return [];
+    const spouseMarriages = marriages.filter(m => m?.husband_id === individual.id || m?.wife_id === individual.id);
+    return spouseMarriages.map(m => {
+      const spouseId = m?.husband_id === individual.id ? m?.wife_id : m?.husband_id;
+      const spouse = individuals.find(i => i?.id === spouseId);
+      return { spouse, marriage: m };
+    }).filter(item => !!item.spouse);
+  }, [individual?.id, individuals, marriages]);
+
+  const children = useMemo(() => {
+    if (!individual) return [];
+    return individuals
+      .filter(child => child?.father_id === individual.id || child?.mother_id === individual.id)
+      .sort((a, b) => {
+        const dateA = a?.birth_date || '9999-12-31';
+        const dateB = b?.birth_date || '9999-12-31';
+        const nameA = a?.name || '';
+        const nameB = b?.name || '';
+        return dateA.localeCompare(dateB) || nameA.localeCompare(nameB);
+      });
+  }, [individual?.id, individuals]);
 
   const fetchEvents = async (id: string) => {
     try {
@@ -93,25 +109,6 @@ export default function IndividualDetail({
   };
 
   if (!individual) return null;
-
-  const father = individuals.find(i => i?.id === individual.father_id);
-  const mother = individuals.find(i => i?.id === individual.mother_id);
-  const spouseMarriages = marriages.filter(m => m?.husband_id === individual.id || m?.wife_id === individual.id);
-  const spousesWithMarriage = spouseMarriages.map(m => {
-    const spouseId = m?.husband_id === individual.id ? m?.wife_id : m?.husband_id;
-    const spouse = individuals.find(i => i?.id === spouseId);
-    return { spouse, marriage: m };
-  }).filter(item => !!item.spouse);
-
-  const children = individuals
-    .filter(child => child?.father_id === individual.id || child?.mother_id === individual.id)
-    .sort((a, b) => {
-      const dateA = a?.birth_date || '9999-12-31';
-      const dateB = b?.birth_date || '9999-12-31';
-      const nameA = a?.name || '';
-      const nameB = b?.name || '';
-      return dateA.localeCompare(dateB) || nameA.localeCompare(nameB);
-    });
 
   return (
     <AnimatePresence>

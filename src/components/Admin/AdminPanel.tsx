@@ -254,7 +254,17 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     setSuccess(false);
 
     try {
-      const { id, created_at, updated_at, ...cleanData } = formData as any;
+      // Strip virtual fields that don't exist in the database schema
+      const { 
+        id, 
+        created_at, 
+        updated_at, 
+        baseId, 
+        displayId, 
+        shortestPath, 
+        alphaPaths,
+        ...cleanData 
+      } = formData as any;
       
       // Automatic Alphanumeric Numbering for NEW individuals (Temporary placeholder - will be recalculated by generator)
       if (!editingId && (!cleanData.ref_code || cleanData.ref_code === '')) {
