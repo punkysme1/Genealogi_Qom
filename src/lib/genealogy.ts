@@ -39,60 +39,65 @@ function findRoot(allIndividuals: Individual[]) {
 }
 
 /**
- * Calculates generation levels and global ranks for all individuals.
- * Generation G0 = Kiai Qomaruddin.
+ * Calculates current generation levels and global ranks for all individuals.
  */
 export function calculateGenerations(allIndividuals: Individual[]) {
   const levels: Record<string, number> = {};
-  if (!allIndividuals || !Array.isArray(allIndividuals)) return { levels, ranks: {} as Record<string, number> };
+  const ranks: Record<string, number> = {};
+  if (!allIndividuals || allIndividuals.length === 0) return { levels, ranks };
 
   const root = findRoot(allIndividuals);
-  
-  if (!root) return { levels, ranks: {} as Record<string, number> };
+  if (!root) return { levels, ranks };
 
-  // BFS to find shortest path depth from Qomaruddin
+  // Pre-build child map for O(1) lookups
+  const childMap = new Map<string, string[]>();
+  allIndividuals.forEach(ind => {
+    if (ind.father_id) {
+      const existing = childMap.get(ind.father_id) || [];
+      childMap.set(ind.father_id, [...existing, ind.id]);
+    }
+    if (ind.mother_id) {
+      const existing = childMap.get(ind.mother_id) || [];
+      childMap.set(ind.mother_id, [...existing, ind.id]);
+    }
+  });
+
+  // BFS
   const queue: { id: string, level: number }[] = [{ id: root.id, level: 0 }];
   levels[root.id] = 0;
 
   while (queue.length > 0) {
     const current = queue.shift();
-    if (!current || !current.id) continue;
+    if (!current) continue;
     const { id, level } = current;
     
-    const children = allIndividuals.filter(i => i && (i.father_id === id || i.mother_id === id));
-    
-    children.forEach(child => {
-      if (child && child.id && (levels[child.id] === undefined || levels[child.id] > level + 1)) {
-        levels[child.id] = level + 1;
-        queue.push({ id: child.id, level: level + 1 });
+    const childrenIds = childMap.get(id) || [];
+    childrenIds.forEach(childId => {
+      if (levels[childId] === undefined || levels[childId] > level + 1) {
+        levels[childId] = level + 1;
+        queue.push({ id: childId, level: level + 1 });
       }
     });
   }
 
-  // Calculate global ranks per level
-  const ranks: Record<string, number> = {};
+  // Ranks
   const individualsByLevel: Record<number, Individual[]> = {};
+  const indMap = new Map(allIndividuals.map(i => [i.id, i]));
 
-  allIndividuals.forEach(ind => {
-    if (!ind) return;
-    const level = levels[ind.id];
-    if (level !== undefined) {
-      if (!individualsByLevel[level]) individualsByLevel[level] = [];
-      individualsByLevel[level].push(ind);
-    }
+  Object.entries(levels).forEach(([id, level]) => {
+    if (!individualsByLevel[level]) individualsByLevel[level] = [];
+    const ind = indMap.get(id);
+    if (ind) individualsByLevel[level].push(ind);
   });
 
   Object.entries(individualsByLevel).forEach(([levelStr, members]) => {
-    // Sort by birth date, then name
     members.sort((a, b) => {
       const dateA = a?.birth_date || '9999-12-31';
       const dateB = b?.birth_date || '9999-12-31';
-      const nameA = a?.name || '';
-      const nameB = b?.name || '';
-      return dateA.localeCompare(dateB) || nameA.localeCompare(nameB);
+      return dateA.localeCompare(dateB) || (a.name || '').localeCompare(b.name || '');
     });
     members.forEach((m, idx) => {
-      if (m && m.id) ranks[m.id] = idx + 1;
+      ranks[m.id] = idx + 1;
     });
   });
 
@@ -100,40 +105,54 @@ export function calculateGenerations(allIndividuals: Individual[]) {
 }
 
 /**
- * Calculates all possible lineage paths for an individual using recursive tracing.
+ * Calculates all possible lineage paths for an individual.
  */
 export function calculatePathIDs(individualId: string, allIndividuals: Individual[]): string[] {
-  if (!individualId || !allIndividuals || !Array.isArray(allIndividuals)) return [];
+  if (!individualId || !allIndividuals || allIndividuals.length === 0) return [];
   
-  const paths: string[] = [];
   const root = findRoot(allIndividuals);
   if (!root) return [];
+  if (individualId === root.id) return ['G0'];
   
-  const indMap = new Map(allIndividuals.filter(i => i && i.id).map(i => [i.id, i]));
+  const paths: string[] = [];
+  const indMap = new Map(allIndividuals.map(i => [i.id, i]));
   
+  // Build child map with sorted children to ensure stable indexing
+  const childMap = new Map<string, string[]>();
+  allIndividuals.forEach(ind => {
+    const parents = [ind.father_id, ind.mother_id].filter(Boolean) as string[];
+    parents.forEach(pId => {
+      const existing = childMap.get(pId) || [];
+      if (!existing.includes(ind.id)) {
+        childMap.set(pId, [...existing, ind.id]);
+      }
+    });
+  });
+
+  // Sort child lists once
+  childMap.forEach((ids, pId) => {
+    ids.sort((aId, bId) => {
+      const a = indMap.get(aId)!;
+      const b = indMap.get(bId)!;
+      const dateA = a.birth_date || '9999-12-31';
+      const dateB = b.birth_date || '9999-12-31';
+      return dateA.localeCompare(dateB) || (a.name || '').localeCompare(b.name || '');
+    });
+  });
+
   function findPaths(currentId: string, currentPath: string, visited: Set<string>) {
     if (currentId === individualId) {
       paths.push(currentPath || 'G0');
+      return;
     }
 
-    if (!currentId || visited.has(currentId)) return; 
-    const nextVisited = new Set(visited);
-    nextVisited.add(currentId);
+    if (visited.has(currentId)) return; 
+    const children = childMap.get(currentId) || [];
+    if (children.length === 0) return;
 
-    const children = allIndividuals.filter(i => i && (i.father_id === currentId || i.mother_id === currentId));
-    
-    children.sort((a, b) => {
-      const dateA = a?.birth_date || '9999-12-31';
-      const dateB = b?.birth_date || '9999-12-31';
-      const nameA = a?.name || '';
-      const nameB = b?.name || '';
-      return dateA.localeCompare(dateB) || nameA.localeCompare(nameB);
-    });
-
-    children.forEach((child, index) => {
-      if (!child || !child.id) return;
-      const nextPath = `${currentPath}${toAlphaNumeric(index + 1)}`;
-      findPaths(child.id, nextPath, nextVisited);
+    visited.add(currentId);
+    children.forEach((childId, index) => {
+      findPaths(childId, `${currentPath}${toAlphaNumeric(index + 1)}`, new Set(visited));
     });
   }
 
@@ -142,78 +161,63 @@ export function calculatePathIDs(individualId: string, allIndividuals: Individua
 }
 
 /**
- * Generates the 3 types of IDs: Base-ID, Path-ID, and Display-ID.
+ * Optimized generation of IDs.
  */
-export function generateGenealogyIDs(individual: Individual | null, allIndividuals: Individual[], marriages: Marriage[]) {
+export function generateGenealogyIDs(
+  individual: Individual | null, 
+  allIndividuals: Individual[], 
+  marriages: Marriage[],
+  providedLevels?: Record<string, number>,
+  providedRanks?: Record<string, number>,
+  skipArabic: boolean = false
+) {
   if (!individual || !individual.id) {
-    return {
-      baseId: '-',
-      pathIds: [], 
-      displayId: '-',
-      shortestPath: '',
-      alphaPaths: []
-    };
+    return { baseId: '-', pathIds: [], displayId: '-', shortestPath: '', alphaPaths: [] };
   }
 
-  const { levels, ranks } = calculateGenerations(allIndividuals);
+  const { levels, ranks } = (providedLevels && providedRanks) 
+    ? { levels: providedLevels, ranks: providedRanks } 
+    : calculateGenerations(allIndividuals);
   
   const level = levels[individual.id];
   const rank = ranks[individual.id];
-
-  // Base-ID: G[Level].[Rank]
   const baseId = level !== undefined ? `G${level}.${rank}` : 'Outer';
   
-  // Alphanumeric paths for Display-ID logic
-  let alphaPaths = calculatePathIDs(individual.id, allIndividuals) || [];
+  const alphaPaths = calculatePathIDs(individual.id, allIndividuals) || [];
   
-  // IF alphaPaths is empty, check if this is an in-law (spouse of someone with an ID)
+  // In-law logic
   if (alphaPaths.length === 0 && !individual.name?.includes('Qomaruddin')) {
     const spouseMarriages = marriages.filter(m => m.husband_id === individual.id || m.wife_id === individual.id);
-    
     for (const m of spouseMarriages) {
       const spouseId = m.husband_id === individual.id ? m.wife_id : m.husband_id;
       if (spouseId) {
         const spousePaths = calculatePathIDs(spouseId, allIndividuals) || [];
         if (spousePaths.length > 0) {
-          // Determine marriage rank for this spouse
           const allSpouseMarriages = marriages
             .filter(sm => sm.husband_id === spouseId || sm.wife_id === spouseId)
-            .sort((a, b) => {
-              const dateA = a.marriage_date || a.created_at || '9999-12-31';
-              const dateB = b.marriage_date || b.created_at || '9999-12-31';
-              return dateA.localeCompare(dateB);
-            });
+            .sort((a, b) => (a.marriage_date || a.created_at || '').localeCompare(b.marriage_date || b.created_at || ''));
           
-          const marriageIndex = allSpouseMarriages.findIndex(sm => sm.id === m.id);
-          const plusCount = marriageIndex !== -1 ? marriageIndex + 1 : 1;
-          const plusSuffix = '+'.repeat(plusCount);
-
-          // Add spouse's path with the appropriate number of + suffixes
-          spousePaths.forEach(p => {
-            alphaPaths.push(`${p}${plusSuffix}`);
-          });
+          const mIndex = allSpouseMarriages.findIndex(sm => sm.id === m.id);
+          const plusSuffix = '+'.repeat(mIndex !== -1 ? mIndex + 1 : 1);
+          spousePaths.forEach(p => alphaPaths.push(`${p}${plusSuffix}`));
         }
       }
     }
   }
 
   const sortedAlpha = [...alphaPaths].sort((a, b) => a.length - b.length || a.localeCompare(b));
-  
-  // Display-ID: Shortest Alphanumeric
-  const shortestAlpha = sortedAlpha[0] || (individual.name && individual.name.includes('Qomaruddin') ? 'G0' : 'Root');
-  const displayId = shortestAlpha;
-
-  // Path-ID: Arabic Lineage as requested (bin/binti)
-  const pathIds = calculateArabicLineage(individual.id, allIndividuals) || [];
+  const shortestAlpha = sortedAlpha[0] || (individual.name?.includes('Qomaruddin') ? 'G0' : 'Root');
 
   return {
     baseId,
-    pathIds, 
-    displayId,
+    pathIds: skipArabic ? [] : (calculateArabicLineage(individual.id, allIndividuals) || []), 
+    displayId: shortestAlpha,
     shortestPath: shortestAlpha,
     alphaPaths
   };
 }
+
+
 
 /**
  * Helper to calculate all lineage paths with names in Arabic style (bin/binti).

@@ -102,16 +102,19 @@ export default function App() {
   const enrichedIndividuals = React.useMemo(() => {
     if (!individuals || individuals.length === 0) return [];
     
-    // We calculate this once for the whole set
+    // Calculate global generations once
     const { levels, ranks } = calculateGenerations(individuals);
     
+    // Map individuals and only calculate displayId (nasab code) for now
+    // Fully detailed Arabic lineage is calculated on-demand in Detail view
     return individuals.map(ind => {
-      // Small optimization: only generate displayId for now as it's the primary ref
-      // We'll calculate Arabic lineage only when detail is opened
       try {
         const level = levels[ind.id];
         const rank = ranks[ind.id];
-        const { displayId } = generateGenealogyIDs(ind, individuals, marriages);
+        
+        // Use optimized call that avoids nested calculateGenerations and skips heavy Arabic lineage tracing
+        const { displayId } = generateGenealogyIDs(ind, individuals, marriages, levels, ranks, true);
+        
         return { 
           ...ind, 
           displayId,
