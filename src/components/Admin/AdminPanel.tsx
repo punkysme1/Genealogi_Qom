@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Individual, Event, Marriage } from '@/types';
 import { supabase } from '@/lib/supabase';
-import { suggestHenryCode, findSpouse, generateGenealogyIDs } from '@/lib/genealogy';
+import { suggestHenryCode, findSpouse, generateGenealogyIDs, calculateGenerations } from '@/lib/genealogy';
 import { cn } from '@/lib/utils';
 import { X, Save, Trash2, UserPlus, ShieldCheck, AlertCircle, Search, ChevronRight, ArrowLeft, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,6 +20,20 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   const [allIndividuals, setAllIndividuals] = useState<Individual[]>([]);
   const [allMarriages, setAllMarriages] = useState<Marriage[]>([]);
   const [searchListQuery, setSearchListQuery] = useState('');
+
+  const filteredList = useMemo(() => {
+    return allIndividuals.filter(ind => 
+      ind.name.toLowerCase().includes(searchListQuery.toLowerCase())
+    );
+  }, [allIndividuals, searchListQuery]);
+
+  const enrichedList = useMemo(() => {
+    const { levels, ranks } = calculateGenerations(allIndividuals);
+    return filteredList.map(ind => ({
+      ...ind,
+      genData: generateGenealogyIDs(ind, allIndividuals, allMarriages, levels, ranks, true)
+    }));
+  }, [filteredList, allIndividuals, allMarriages]);
   
   const [formData, setFormData] = useState<Partial<Individual>>({
     name: '',
@@ -351,11 +365,6 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     }
   };
 
-  const filteredList = allIndividuals.filter(ind => 
-    ind.name.toLowerCase().includes(searchListQuery.toLowerCase()) ||
-    ind.ref_code?.toLowerCase().includes(searchListQuery.toLowerCase())
-  );
-
   return (
     <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-[110] flex items-center justify-end">
       <motion.div
@@ -398,7 +407,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {filteredList.map(ind => (
+              {enrichedList.map(ind => (
                 <button 
                   key={ind.id}
                   onClick={() => handleEditClick(ind)}
@@ -412,10 +421,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                       <p className="text-sm font-bold text-ink">{ind.name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[9px] font-mono font-bold bg-primary-olive/10 text-primary-olive px-1 rounded border border-primary-olive/20 uppercase">
-                          {generateGenealogyIDs(ind, allIndividuals, allMarriages).displayId || 'ID_PENDING'}
+                          {ind.genData.displayId || 'ID_PENDING'}
                         </span>
                         <span className="text-[9px] font-mono text-ink-light uppercase">
-                          {generateGenealogyIDs(ind, allIndividuals, allMarriages).baseId}
+                          {ind.genData.baseId}
                         </span>
                       </div>
                     </div>

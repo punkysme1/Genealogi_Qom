@@ -753,15 +753,19 @@ export default function App() {
       </main>
 
       {/* Sidebar Detail */}
-      <IndividualDetail 
-        individual={selectedIndividual} 
-        individuals={individuals}
-        marriages={marriages}
-        onClose={() => setSelectedIndividual(null)}
-        isAdmin={!!user}
-        onEdit={handleEditIndividual}
-        onSelectIndividual={setSelectedIndividual}
-      />
+      <AnimatePresence>
+        {selectedIndividual && (
+          <IndividualDetail 
+            individual={selectedIndividual} 
+            individuals={individuals}
+            marriages={marriages}
+            onClose={() => setSelectedIndividual(null)}
+            isAdmin={!!user}
+            onEdit={handleEditIndividual}
+            onSelectIndividual={setSelectedIndividual}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Modals */}
       <AnimatePresence>

@@ -108,18 +108,18 @@ export default function IndividualDetail({
     }
   };
 
+  // Guard against missing individual - parent should ideally handle this but we keep a safe fallback
   if (!individual) return null;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ x: '100%', opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={{ x: '100%', opacity: 0 }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="fixed right-0 top-0 h-full w-full sm:w-[360px] bg-surface shadow-2xl z-[50] overflow-y-auto border-l border-border-olive"
-      >
-        <div className="p-6">
+    <motion.div
+      initial={{ x: '100%', opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: '100%', opacity: 0 }}
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      className="fixed right-0 top-0 h-full w-full sm:w-[360px] bg-surface shadow-2xl z-[50] overflow-y-auto border-l border-border-olive"
+    >
+      <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             {isAdmin ? (
               <button 
@@ -359,6 +359,5 @@ export default function IndividualDetail({
           </div>
         </div>
       </motion.div>
-    </AnimatePresence>
   );
 }
