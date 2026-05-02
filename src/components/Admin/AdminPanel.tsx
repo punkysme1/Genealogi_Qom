@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Individual, Event, Marriage } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { suggestHenryCode, findSpouse, generateGenealogyIDs, calculateGenerations } from '@/lib/genealogy';
-import { cn } from '@/lib/utils';
-import { X, Save, Trash2, UserPlus, ShieldCheck, AlertCircle, Search, ChevronRight, ArrowLeft, MapPin } from 'lucide-react';
+import { cn, generateRandomSlug } from '@/lib/utils';
+import { X, Save, Trash2, UserPlus, ShieldCheck, AlertCircle, Search, ChevronRight, ArrowLeft, MapPin, RefreshCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AdminPanelProps {
@@ -274,6 +274,12 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     setSuccess(false);
 
     try {
+      // Ensure slug is generated if missing for new entry
+      let currentSlug = formData.slug;
+      if (!editingId && (!currentSlug || currentSlug.trim() === '')) {
+        currentSlug = generateRandomSlug(8);
+      }
+
       // Strip virtual fields that don't exist in the database schema
       const { 
         id, 
@@ -287,27 +293,47 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
         level,
         rank,
         pathIds,
-        ...cleanData 
-      } = formData as any;
+        ...dataToSubmit 
+      } = { ...formData, slug: currentSlug } as any;
       
-      if (cleanData.father_id === '') cleanData.father_id = null;
-      if (cleanData.mother_id === '') cleanData.mother_id = null;
-      if (cleanData.birth_date === '') cleanData.birth_date = null;
-      if (cleanData.death_date === '') cleanData.death_date = null;
-      if (cleanData.verified_by === '') cleanData.verified_by = null;
-      if (cleanData.is_alive === undefined) cleanData.is_alive = true;
-      if (cleanData.birth_place === '') cleanData.birth_place = null;
-      if (cleanData.death_place === '') cleanData.death_place = null;
-      if (cleanData.current_location === '') cleanData.current_location = null;
-      if (cleanData.occupation === '') cleanData.occupation = null;
-      if (cleanData.bio === '') cleanData.bio = null;
+      if (dataToSubmit.father_id === '') dataToSubmit.father_id = null;
+      if (dataToSubmit.mother_id === '') dataToSubmit.mother_id = null;
+      if (dataToSubmit.birth_date === '') dataToSubmit.birth_date = null;
+      if (dataToSubmit.death_date === '') dataToSubmit.death_date = null;
+      if (dataToSubmit.verified_by === '') dataToSubmit.verified_by = null;
+      if (dataToSubmit.is_alive === undefined) dataToSubmit.is_alive = true;
+      if (dataToSubmit.birth_place === '') dataToSubmit.birth_place = null;
+      if (dataToSubmit.death_place === '') dataToSubmit.death_place = null;
+      if (dataToSubmit.current_location === '') dataToSubmit.current_location = null;
+      if (dataToSubmit.occupation === '') dataToSubmit.occupation = null;
+      if (dataToSubmit.bio === '') dataToSubmit.bio = null;
 
       if (editingId) {
-        const { error } = await supabase.from('individuals').update(cleanData).eq('id', editingId);
-        if (error) throw error;
+        const { error } = await supabase.from('individuals').update(dataToSubmit).eq('id', editingId);
+        if (error) {
+          // If slug column is the problem, try without it as fallback but warn
+          if (error.message.includes('slug') || error.code === 'PGRST116') {
+            const { slug: _, ...noSlugData } = dataToSubmit;
+            const { error: retryError } = await supabase.from('individuals').update(noSlugData).eq('id', editingId);
+            if (retryError) throw retryError;
+            setError('Catatan: Kolom "slug" tidak ditemukan di database. Data disimpan tanpa slug.');
+          } else {
+            throw error;
+          }
+        }
       } else {
-        const { error } = await supabase.from('individuals').insert([cleanData]);
-        if (error) throw error;
+        const { error } = await supabase.from('individuals').insert([dataToSubmit]);
+        if (error) {
+          // Fallback if slug column missing
+          if (error.message.includes('slug') || error.code === 'PGRST116') {
+            const { slug: _, ...noSlugData } = dataToSubmit;
+            const { error: retryError } = await supabase.from('individuals').insert([noSlugData]);
+            if (retryError) throw retryError;
+            setError('Catatan: Kolom "slug" tidak ditemukan di database. Data disimpan tanpa slug.');
+          } else {
+            throw error;
+          }
+        }
       }
 
       setSuccess(true);
@@ -538,12 +564,21 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-xs font-bold text-ink-light mb-1.5">Custom Slug (Link URL)</label>
+                    <label className="block text-xs font-bold text-ink-light mb-1.5 flex justify-between items-center">
+                      <span>Custom Slug (Alfanumerik)</span>
+                      <button 
+                        type="button"
+                        onClick={() => setFormData({ ...formData, slug: generateRandomSlug(8) })}
+                        className="text-[9px] text-primary-olive hover:underline flex items-center gap-1"
+                      >
+                        <RefreshCcw size={10} /> Acak Slug
+                      </button>
+                    </label>
                     <input
                       value={formData.slug || ''}
-                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
-                      className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
-                      placeholder="e.g. kh-nawawi-851"
+                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                      className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none font-mono"
+                      placeholder="e.g. x7y2z9a1"
                     />
                   </div>
                   <div>
