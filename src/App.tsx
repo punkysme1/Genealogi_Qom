@@ -913,6 +913,10 @@ export default function App() {
                       <div className="w-2.5 h-2.5 md:w-3 md:h-3 bg-rose-100 border border-rose-300 rounded-sm" />
                       <span className="font-bold text-rose-700">Perempuan</span>
                     </div>
+                    <div className="flex items-center gap-1.5 md:gap-2">
+                      <div className="w-2.5 h-2.5 md:w-3 md:h-3 bg-indigo-500 rounded-sm" />
+                      <span className="font-bold text-indigo-700">Sesama Keturunan</span>
+                    </div>
                   </div>
                   <div className="h-px bg-border-olive/30 w-full" />
                   <div className="flex items-center justify-between gap-3 md:gap-4">

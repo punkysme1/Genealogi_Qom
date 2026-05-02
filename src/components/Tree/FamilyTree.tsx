@@ -290,25 +290,37 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       if (indMap.has(m.husband_id) && indMap.has(m.wife_id)) {
         const edgeId = `e-mrg-${m.id}`;
         if (!addedEdgeIds.has(edgeId)) {
-          const isInLineage = highlightedNodeIds.has(m.husband_id) && highlightedNodeIds.has(m.wife_id);
+          const husbandPath = shortestPaths[m.husband_id] || '';
+          const wifePath = shortestPaths[m.wife_id] || '';
+          const husbandIsBlood = !husbandPath.includes('+');
+          const wifeIsBlood = !wifePath.includes('+');
+          
+          const husbandGen = levels[m.husband_id];
+          const wifeGen = levels[m.wife_id];
+          
+          // Special case: Both are blood descendants
+          const isConsanguineous = husbandIsBlood && wifeIsBlood;
+          const isCrossGen = isConsanguineous && husbandGen !== wifeGen;
+          const isInLineage = (highlightedNodeIds.has(m.husband_id) && highlightedNodeIds.has(m.wife_id)) || isConsanguineous;
           
           const husbandExists = nodes.some(n => n.id === m.husband_id);
           const wifeExists = nodes.some(n => n.id === m.wife_id);
 
           if (isInLineage || (husbandExists && wifeExists)) {
+            const strokeColor = isConsanguineous ? '#6366f1' : (isInLineage ? '#10b981' : '#E2725B');
             edges.push({
               id: edgeId,
               source: m.husband_id,
               target: m.wife_id,
               label: '∞',
-              labelStyle: { fill: isInLineage ? '#10b981' : '#E2725B', fontWeight: 700, fontSize: 16 },
+              labelStyle: { fill: strokeColor, fontWeight: 700, fontSize: 16 },
               style: { 
-                stroke: isInLineage ? '#10b981' : '#E2725B', 
+                stroke: strokeColor, 
                 strokeWidth: isInLineage ? 4 : 3, 
                 strokeDasharray: '8,4', 
                 opacity: isInLineage ? 1 : 0.8 
               },
-              animated: false,
+              animated: isCrossGen,
               zIndex: isInLineage ? 10 : 1,
             });
             addedEdgeIds.add(edgeId);
