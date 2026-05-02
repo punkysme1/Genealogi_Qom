@@ -282,6 +282,9 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
         shortestPath, 
         alphaPaths,
         genData,
+        level,
+        rank,
+        pathIds,
         ...cleanData 
       } = formData as any;
       
