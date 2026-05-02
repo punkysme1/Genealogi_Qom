@@ -3,6 +3,7 @@ export type Gender = 'M' | 'F';
 export interface Individual {
   id: string;
   name: string;
+  slug?: string;
   gender: Gender;
   birth_date?: string;
   death_date?: string;

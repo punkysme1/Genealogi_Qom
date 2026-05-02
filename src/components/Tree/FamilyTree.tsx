@@ -163,17 +163,30 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         usedIds.add(id);
       });
 
-      // Position layout units
-      let currentX = -(layoutUnits.length * (NODE_WIDTH + HORIZONTAL_GAP)) / 2;
+      // Position layout units per level - Center them if in Lineage/Focus mode
+      const activeUnits = layoutUnits.filter(unit => {
+        if (!selectedIndividualId) return true;
+        return unit.some(id => highlightedNodeIds.has(id));
+      });
+
+      const totalLevelWidth = activeUnits.reduce((acc, unit) => {
+        const unitWidth = unit.length === 2 ? (2 * NODE_WIDTH + SPOUSE_GAP) : NODE_WIDTH;
+        return acc + unitWidth + HORIZONTAL_GAP;
+      }, -HORIZONTAL_GAP);
+
+      let currentX = -totalLevelWidth / 2;
       
       layoutUnits.forEach((unit) => {
+        const isInLineageUnit = unit.some(id => highlightedNodeIds.has(id));
+        
+        // In focus mode, skip rendering/spacing for non-lineage units
+        if (selectedIndividualId && !isInLineageUnit) return;
+
         if (unit.length === 2) {
           // Couple
           unit.forEach((id, idx) => {
             const ind = indMap.get(id)!;
             const genData = genDataMap.get(id);
-            const displayId = genData?.displayId || '?';
-
             const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
             const isSelected = selectedIndividualId === ind.id;
             const isInLineage = highlightedNodeIds.has(ind.id);
@@ -198,8 +211,6 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
           // Single
           const ind = indMap.get(unit[0])!;
           const genData = genDataMap.get(unit[0]);
-          const displayId = genData?.displayId || '?';
-
           const isHighlighted = searchQuery && ind.name && ind.name.toLowerCase().includes(searchQuery.toLowerCase());
           const isSelected = selectedIndividualId === ind.id;
           const isInLineage = highlightedNodeIds.has(ind.id);
@@ -229,34 +240,47 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         const edgeId = `e-f-${ind.father_id}-${ind.id}`;
         if (!addedEdgeIds.has(edgeId)) {
           const isLineage = highlightedEdgeIds.has(edgeId);
-          edges.push({
-            id: edgeId,
-            source: ind.father_id,
-            target: ind.id,
-            style: isLineage 
-              ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
-              : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
-            animated: isLineage,
-            zIndex: isLineage ? 10 : 1,
-          });
-          addedEdgeIds.add(edgeId);
+          
+          // Filter edges: Only show if part of lineage or if nodes on both ends exist
+          const sourceExists = nodes.some(n => n.id === ind.father_id);
+          const targetExists = nodes.some(n => n.id === ind.id);
+
+          if (isLineage || (sourceExists && targetExists)) {
+            edges.push({
+              id: edgeId,
+              source: ind.father_id,
+              target: ind.id,
+              style: isLineage 
+                ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
+                : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+              animated: isLineage,
+              zIndex: isLineage ? 10 : 1,
+            });
+            addedEdgeIds.add(edgeId);
+          }
         }
       }
       if (ind.mother_id && indMap.has(ind.mother_id)) {
         const edgeId = `e-m-${ind.mother_id}-${ind.id}`;
         if (!addedEdgeIds.has(edgeId)) {
           const isLineage = highlightedEdgeIds.has(edgeId);
-          edges.push({
-            id: edgeId,
-            source: ind.mother_id,
-            target: ind.id,
-            style: isLineage 
-              ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
-              : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
-            animated: isLineage,
-            zIndex: isLineage ? 10 : 1,
-          });
-          addedEdgeIds.add(edgeId);
+          
+          const sourceExists = nodes.some(n => n.id === ind.mother_id);
+          const targetExists = nodes.some(n => n.id === ind.id);
+
+          if (isLineage || (sourceExists && targetExists)) {
+            edges.push({
+              id: edgeId,
+              source: ind.mother_id,
+              target: ind.id,
+              style: isLineage 
+                ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
+                : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+              animated: isLineage,
+              zIndex: isLineage ? 10 : 1,
+            });
+            addedEdgeIds.add(edgeId);
+          }
         }
       }
     });
@@ -267,22 +291,28 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         const edgeId = `e-mrg-${m.id}`;
         if (!addedEdgeIds.has(edgeId)) {
           const isInLineage = highlightedNodeIds.has(m.husband_id) && highlightedNodeIds.has(m.wife_id);
-          edges.push({
-            id: edgeId,
-            source: m.husband_id,
-            target: m.wife_id,
-            label: '∞',
-            labelStyle: { fill: isInLineage ? '#10b981' : '#E2725B', fontWeight: 700, fontSize: 16 },
-            style: { 
-              stroke: isInLineage ? '#10b981' : '#E2725B', 
-              strokeWidth: isInLineage ? 4 : 3, 
-              strokeDasharray: '8,4', 
-              opacity: isInLineage ? 1 : 0.8 
-            },
-            animated: false,
-            zIndex: isInLineage ? 10 : 1,
-          });
-          addedEdgeIds.add(edgeId);
+          
+          const husbandExists = nodes.some(n => n.id === m.husband_id);
+          const wifeExists = nodes.some(n => n.id === m.wife_id);
+
+          if (isInLineage || (husbandExists && wifeExists)) {
+            edges.push({
+              id: edgeId,
+              source: m.husband_id,
+              target: m.wife_id,
+              label: '∞',
+              labelStyle: { fill: isInLineage ? '#10b981' : '#E2725B', fontWeight: 700, fontSize: 16 },
+              style: { 
+                stroke: isInLineage ? '#10b981' : '#E2725B', 
+                strokeWidth: isInLineage ? 4 : 3, 
+                strokeDasharray: '8,4', 
+                opacity: isInLineage ? 1 : 0.8 
+              },
+              animated: false,
+              zIndex: isInLineage ? 10 : 1,
+            });
+            addedEdgeIds.add(edgeId);
+          }
         }
       }
     });

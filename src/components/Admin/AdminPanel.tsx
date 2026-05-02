@@ -37,6 +37,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   
   const [formData, setFormData] = useState<Partial<Individual>>({
     name: '',
+    slug: '',
     gender: 'M',
     birth_date: '',
     death_date: '',
@@ -200,6 +201,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     const isMale = formData.gender === 'M';
     setFormData({
       name: '',
+      slug: '',
       gender: 'M',
       birth_date: '',
       death_date: '',
@@ -332,6 +334,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   const handleAddNew = () => {
     setFormData({
       name: '',
+      slug: '',
       gender: 'M',
       birth_date: '',
       death_date: '',
@@ -532,6 +535,15 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
                       placeholder="Nama individu baru..."
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-ink-light mb-1.5">Custom Slug (Link URL)</label>
+                    <input
+                      value={formData.slug || ''}
+                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
+                      className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
+                      placeholder="e.g. kh-nawawi-851"
                     />
                   </div>
                   <div>
