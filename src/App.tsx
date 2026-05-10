@@ -100,6 +100,7 @@ export default function App() {
   const [selectedLoc, setSelectedLoc] = useState<string | null>(null);
   const [lifeStatusFilter, setLifeStatusFilter] = useState<'all' | 'alive' | 'deceased'>('all');
   const [verificationFilter, setVerificationFilter] = useState<'all' | 'verified' | 'unverified'>('all');
+  const [economicStatusFilter, setEconomicStatusFilter] = useState<'all' | 'Kaya' | 'Menengah' | 'Miskin'>('all');
   
   const [searchResults, setSearchResults] = useState<(Individual & { displayId: string })[]>([]);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -333,7 +334,7 @@ export default function App() {
   }, [individuals]);
 
   const filteredIndividualsByGen = React.useMemo(() => {
-    if (selectedGen === null && selectedLoc === null && lifeStatusFilter === 'all' && verificationFilter === 'all') return [];
+    if (selectedGen === null && selectedLoc === null && lifeStatusFilter === 'all' && verificationFilter === 'all' && economicStatusFilter === 'all') return [];
     
     const { levels } = genMetadata;
     let filtered = [...individuals];
@@ -360,10 +361,14 @@ export default function App() {
     } else if (verificationFilter === 'unverified') {
       filtered = filtered.filter(ind => !ind.is_verified);
     }
+
+    if (user && economicStatusFilter !== 'all') {
+      filtered = filtered.filter(ind => ind.economic_status === economicStatusFilter);
+    }
     
     // Safety deduplication
     return Array.from(new Map(filtered.map(i => [i.id, i])).values());
-  }, [individuals, selectedGen, selectedLoc, lifeStatusFilter, verificationFilter, genMetadata]);
+  }, [individuals, selectedGen, selectedLoc, lifeStatusFilter, verificationFilter, economicStatusFilter, genMetadata, user]);
 
   const renderSidebar = () => (
     <>
@@ -455,7 +460,7 @@ export default function App() {
           ))}
         </div>
 
-        {(selectedGen !== null || selectedLoc !== null || lifeStatusFilter !== 'all' || verificationFilter !== 'all') && (
+        {(selectedGen !== null || selectedLoc !== null || lifeStatusFilter !== 'all' || verificationFilter !== 'all' || economicStatusFilter !== 'all') && (
           <div className="bg-bg p-3 rounded-lg border border-primary-olive/20 mb-4 animate-in slide-in-from-top-2">
             <div className="flex justify-between items-center mb-2">
               <div className="flex flex-col">
@@ -468,6 +473,7 @@ export default function App() {
                   setSelectedLoc(null); 
                   setLifeStatusFilter('all'); 
                   setVerificationFilter('all'); 
+                  setEconomicStatusFilter('all');
                 }} 
                 className="text-[9px] text-rose-500 font-bold uppercase tracking-tighter hover:underline"
               >
@@ -493,7 +499,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 mb-4">
           <button 
             onClick={() => setVerificationFilter(verificationFilter === 'verified' ? 'all' : 'verified')}
             className={cn(
@@ -515,6 +521,26 @@ export default function App() {
             <span className="text-[8px] uppercase tracking-tighter font-bold text-ink-light">Belum Verif</span>
           </button>
         </div>
+
+        {user && (
+          <div className="mb-4">
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-2 italic">Status Ekonomi (Admin)</h3>
+            <div className="grid grid-cols-3 gap-1">
+              {['Kaya', 'Menengah', 'Miskin'].map(status => (
+                <button
+                  key={status}
+                  onClick={() => setEconomicStatusFilter(economicStatusFilter === status ? 'all' : status as any)}
+                  className={cn(
+                    "p-1.5 rounded-lg border text-[9px] font-bold transition-all",
+                    economicStatusFilter === status ? "bg-primary-olive text-white border-primary-olive" : "bg-bg/30 border-border-olive/30 hover:border-primary-olive/30"
+                  )}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div>
@@ -912,6 +938,14 @@ export default function App() {
                     <div className="flex items-center gap-1.5 md:gap-2">
                       <div className="w-2.5 h-2.5 md:w-3 md:h-3 bg-rose-100 border border-rose-300 rounded-sm" />
                       <span className="font-bold text-rose-700">Perempuan</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 md:gap-2">
+                      <div className="w-2 md:w-3 h-0.5 bg-rose-800 rounded-full" />
+                      <span className="font-bold text-rose-900">Leluhur</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 md:gap-2">
+                      <div className="w-2 md:w-3 h-0.5 bg-emerald-500 rounded-full" />
+                      <span className="font-bold text-emerald-700">Keturunan</span>
                     </div>
                     <div className="flex items-center gap-1.5 md:gap-2">
                       <div className="w-2.5 h-2.5 md:w-3 md:h-3 bg-indigo-500 rounded-sm" />

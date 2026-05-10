@@ -15,7 +15,11 @@ export interface Individual {
   bio?: string;
   is_alive?: boolean;
   is_verified: boolean;
-  verified_by?: string; // Verifikator
+  verified_by?: string; // Legacy field
+  verification_type?: 'Manuskrip' | 'Dokumen' | 'Verifikator';
+  verification_source?: string;
+  economic_status?: 'Kaya' | 'Menengah' | 'Miskin';
+  profile_photo_url?: string;
   father_id?: string;
   mother_id?: string;
   created_at: string;

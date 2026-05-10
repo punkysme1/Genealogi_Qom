@@ -78,7 +78,8 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
 
     // 4. Highlight Logic
     const highlightedNodeIds = new Set<string>();
-    const highlightedEdgeIds = new Set<string>();
+    const ancestorEdges = new Set<string>();
+    const descendantEdges = new Set<string>();
 
     if (selectedIndividualId) {
       highlightedNodeIds.add(selectedIndividualId);
@@ -92,12 +93,12 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         if (!ind) return;
         if (ind.father_id && indMap.has(ind.father_id)) {
           highlightedNodeIds.add(ind.father_id);
-          highlightedEdgeIds.add(`e-f-${ind.father_id}-${id}`);
+          ancestorEdges.add(`e-f-${ind.father_id}-${id}`);
           findAncestors(ind.father_id);
         }
         if (ind.mother_id && indMap.has(ind.mother_id)) {
           highlightedNodeIds.add(ind.mother_id);
-          highlightedEdgeIds.add(`e-m-${ind.mother_id}-${id}`);
+          ancestorEdges.add(`e-m-${ind.mother_id}-${id}`);
           findAncestors(ind.mother_id);
         }
       };
@@ -111,12 +112,15 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         const children = childMap.get(id) || [];
         children.forEach(childId => {
           highlightedNodeIds.add(childId);
-          highlightedEdgeIds.add(indMap.get(childId)?.father_id === id ? `e-f-${id}-${childId}` : `e-m-${id}-${childId}`);
+          descendantEdges.add(indMap.get(childId)?.father_id === id ? `e-f-${id}-${childId}` : `e-m-${id}-${childId}`);
           findDescendants(childId);
         });
       };
       findDescendants(selectedIndividualId);
     }
+    
+    // Combine for highlighting and visibility
+    const highlightedEdgeIds = new Set([...ancestorEdges, ...descendantEdges]);
 
     Object.keys(groups).sort((a, b) => Number(a) - Number(b)).forEach(levelStr => {
       const level = Number(levelStr);
@@ -239,20 +243,23 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       if (ind.father_id && indMap.has(ind.father_id)) {
         const edgeId = `e-f-${ind.father_id}-${ind.id}`;
         if (!addedEdgeIds.has(edgeId)) {
-          const isLineage = highlightedEdgeIds.has(edgeId);
+          const isAncestor = ancestorEdges.has(edgeId);
+          const isDescendant = descendantEdges.has(edgeId);
+          const isLineage = isAncestor || isDescendant;
           
           // Filter edges: Only show if part of lineage or if nodes on both ends exist
           const sourceExists = nodes.some(n => n.id === ind.father_id);
           const targetExists = nodes.some(n => n.id === ind.id);
 
           if (isLineage || (sourceExists && targetExists)) {
+            const strokeColor = isAncestor ? '#991b1b' : (isDescendant ? '#10b981' : '#C2B280');
             edges.push({
               id: edgeId,
               source: ind.father_id,
               target: ind.id,
               style: isLineage 
-                ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
-                : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+                ? { stroke: strokeColor, strokeWidth: 4, opacity: 1 } 
+                : { stroke: strokeColor, strokeWidth: 2, opacity: 0.6 },
               animated: isLineage,
               zIndex: isLineage ? 10 : 1,
             });
@@ -263,19 +270,22 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
       if (ind.mother_id && indMap.has(ind.mother_id)) {
         const edgeId = `e-m-${ind.mother_id}-${ind.id}`;
         if (!addedEdgeIds.has(edgeId)) {
-          const isLineage = highlightedEdgeIds.has(edgeId);
+          const isAncestor = ancestorEdges.has(edgeId);
+          const isDescendant = descendantEdges.has(edgeId);
+          const isLineage = isAncestor || isDescendant;
           
           const sourceExists = nodes.some(n => n.id === ind.mother_id);
           const targetExists = nodes.some(n => n.id === ind.id);
 
           if (isLineage || (sourceExists && targetExists)) {
+            const strokeColor = isAncestor ? '#991b1b' : (isDescendant ? '#10b981' : '#C2B280');
             edges.push({
               id: edgeId,
               source: ind.mother_id,
               target: ind.id,
               style: isLineage 
-                ? { stroke: '#10b981', strokeWidth: 4, opacity: 1 } 
-                : { stroke: '#C2B280', strokeWidth: 2, opacity: 0.6 },
+                ? { stroke: strokeColor, strokeWidth: 4, opacity: 1 } 
+                : { stroke: strokeColor, strokeWidth: 2, opacity: 0.6 },
               animated: isLineage,
               zIndex: isLineage ? 10 : 1,
             });
@@ -307,7 +317,7 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
           const wifeExists = nodes.some(n => n.id === m.wife_id);
 
           if (isInLineage || (husbandExists && wifeExists)) {
-            const strokeColor = isConsanguineous ? '#6366f1' : (isInLineage ? '#10b981' : '#E2725B');
+            const strokeColor = isConsanguineous ? '#6366f1' : '#E2725B';
             edges.push({
               id: edgeId,
               source: m.husband_id,
@@ -316,9 +326,9 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
               labelStyle: { fill: strokeColor, fontWeight: 700, fontSize: 16 },
               style: { 
                 stroke: strokeColor, 
-                strokeWidth: isInLineage ? 4 : 3, 
+                strokeWidth: isInLineage ? 5 : 3, 
                 strokeDasharray: '8,4', 
-                opacity: isInLineage ? 1 : 0.8 
+                opacity: isInLineage ? 1 : 0.6 
               },
               animated: isCrossGen,
               zIndex: isInLineage ? 10 : 1,

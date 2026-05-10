@@ -12,9 +12,14 @@ CREATE TABLE individuals (
     education TEXT,
     occupation TEXT,
     bio TEXT,
+    slug TEXT UNIQUE,
+    profile_photo_url TEXT,
+    economic_status TEXT CHECK (economic_status IN ('Kaya', 'Menengah', 'Miskin')),
     is_alive BOOLEAN DEFAULT TRUE,
     is_verified BOOLEAN DEFAULT FALSE,
-    verified_by TEXT, -- Nama verifikator
+    verified_by TEXT, -- Legacy name field
+    verification_type TEXT CHECK (verification_type IN ('Manuskrip', 'Dokumen', 'Verifikator')),
+    verification_source TEXT,
     father_id UUID REFERENCES individuals(id),
     mother_id UUID REFERENCES individuals(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),

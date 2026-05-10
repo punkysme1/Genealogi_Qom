@@ -48,6 +48,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     is_alive: true,
     is_verified: false,
     verified_by: '',
+    verification_type: 'Manuskrip',
+    verification_source: '',
+    economic_status: 'Menengah',
+    profile_photo_url: '',
     father_id: '',
     mother_id: '',
   });
@@ -307,6 +311,8 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       if (dataToSubmit.current_location === '') dataToSubmit.current_location = null;
       if (dataToSubmit.occupation === '') dataToSubmit.occupation = null;
       if (dataToSubmit.bio === '') dataToSubmit.bio = null;
+      if (dataToSubmit.profile_photo_url === '') dataToSubmit.profile_photo_url = null;
+      if (dataToSubmit.verification_source === '') dataToSubmit.verification_source = null;
 
       if (editingId) {
         const { error } = await supabase.from('individuals').update(dataToSubmit).eq('id', editingId);
@@ -371,6 +377,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       is_alive: true,
       is_verified: false,
       verified_by: '',
+      verification_type: 'Manuskrip',
+      verification_source: '',
+      economic_status: 'Menengah',
+      profile_photo_url: '',
       father_id: '',
       mother_id: '',
     });
@@ -581,6 +591,15 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                       placeholder="e.g. x7y2z9a1"
                     />
                   </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-ink-light mb-1.5">Link Foto Profil (URL)</label>
+                    <input
+                      value={formData.profile_photo_url || ''}
+                      onChange={(e) => setFormData({ ...formData, profile_photo_url: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
+                      placeholder="https://example.com/photo.jpg"
+                    />
+                  </div>
                   <div>
                     <label className="block text-xs font-bold text-ink-light mb-1.5">Gender</label>
                     <select
@@ -658,28 +677,89 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                     />
                     <p className="text-[10px] text-ink-light italic mt-1.5">* Jika sudah wafat, sebaran wilayah otomatis mengambil data 'Tempat Wafat' jika kolom ini kosong.</p>
                   </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-ink-light mb-1.5 italic underline decoration-primary-olive/30">Status Ekonomi & Pekerjaan (Hanya Admin)</label>
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      {['Miskin', 'Menengah', 'Kaya'].map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, economic_status: status as any })}
+                          className={cn(
+                            "py-2 rounded-lg border text-[10px] font-bold transition-all",
+                            formData.economic_status === status 
+                              ? "bg-primary-olive text-white border-primary-olive" 
+                              : "bg-white text-primary-olive border-border-olive"
+                          )}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      value={formData.occupation || ''}
+                      onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
+                      className="w-full px-4 py-2 bg-white border border-border-olive rounded-lg text-xs focus:ring-1 focus:ring-primary-olive focus:outline-none placeholder:italic"
+                      placeholder="Pekerjaan / Jabatan..."
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Section: Verifikasi */}
               <div className="space-y-4">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest text-primary-olive border-b border-primary-olive/20 pb-2">Verifikasi</h3>
-                <div className="flex items-center gap-4 bg-surface p-4 rounded-xl border border-border-olive">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_verified}
-                    onChange={(e) => setFormData({ ...formData, is_verified: e.target.checked })}
-                    className="w-5 h-5 rounded border-border-olive text-primary-olive focus:ring-primary-olive"
-                  />
-                  <div className="flex-1">
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-primary-olive border-b border-primary-olive/20 pb-2">Sistem Verifikasi Berlapis</h3>
+                <div className="bg-surface p-5 rounded-xl border border-border-olive space-y-4 shadow-inner-white">
+                  <div className="flex items-center gap-3">
                     <input
-                      value={formData.verified_by || ''}
-                      onChange={(e) => setFormData({ ...formData, verified_by: e.target.value })}
-                      disabled={!formData.is_verified}
-                      className="w-full px-3 py-1.5 bg-bg border border-border-olive rounded-lg text-xs focus:ring-1 focus:ring-primary-olive focus:outline-none uppercase font-bold disabled:opacity-50"
-                      placeholder="Nama Verifikator"
+                      type="checkbox"
+                      checked={formData.is_verified}
+                      onChange={(e) => setFormData({ ...formData, is_verified: e.target.checked })}
+                      className="w-5 h-5 rounded border-border-olive text-primary-olive focus:ring-primary-olive"
                     />
+                    <span className="text-sm font-bold text-ink italic">Tandai sebagai data terverifikasi</span>
                   </div>
+                  
+                  {formData.is_verified && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="grid grid-cols-1 gap-4 pt-2 border-t border-border-olive/30"
+                    >
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-ink-light mb-1.5 uppercase">Sumber Verifikasi</label>
+                          <select
+                            value={formData.verification_type || 'Manuskrip'}
+                            onChange={(e) => setFormData({ ...formData, verification_type: e.target.value as any })}
+                            className="w-full px-3 py-2 bg-white border border-border-olive rounded-lg text-xs focus:ring-1 focus:ring-primary-olive focus:outline-none font-bold"
+                          >
+                            <option value="Manuskrip">Manuskrip</option>
+                            <option value="Dokumen">Dokumen</option>
+                            <option value="Verifikator">Verifikator</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-ink-light mb-1.5 uppercase">Nama Verifikator/Pemaraf</label>
+                          <input
+                            value={formData.verified_by || ''}
+                            onChange={(e) => setFormData({ ...formData, verified_by: e.target.value })}
+                            className="w-full px-3 py-2 bg-white border border-border-olive rounded-lg text-xs focus:ring-1 focus:ring-primary-olive focus:outline-none font-mono"
+                            placeholder="E.g. Tim Ittihaf"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-ink-light mb-1.5 uppercase">Referensi Sumber (Judul Buku/Kode Dokumen)</label>
+                        <input
+                          value={formData.verification_source || ''}
+                          onChange={(e) => setFormData({ ...formData, verification_source: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-border-olive rounded-lg text-xs focus:ring-1 focus:ring-primary-olive focus:outline-none italic"
+                          placeholder="E.g. Manuskrip Kertojoyo Bagian A3"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               </div>
 

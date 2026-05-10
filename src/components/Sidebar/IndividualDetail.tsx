@@ -17,7 +17,9 @@ import {
   Star,
   Fingerprint,
   Link2,
-  GitBranch
+  GitBranch,
+  CreditCard,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -30,6 +32,8 @@ interface IndividualDetailProps {
   onEdit?: (individual: Individual) => void;
   onSelectIndividual?: (individual: Individual) => void;
 }
+
+const DEFAULT_PHOTO = 'https://res.cloudinary.com/dkarruwdb/image/upload/v1778391420/GENEALOGI_coklat_nll05k.png';
 
 export default function IndividualDetail({ 
   individual, 
@@ -97,6 +101,27 @@ export default function IndividualDetail({
       });
   }, [individual?.id, individuals]);
 
+  const siblings = useMemo(() => {
+    if (!individual) return [];
+    if (!individual.father_id && !individual.mother_id) return [];
+    
+    const siblingList = individuals.filter(ind => {
+      if (ind.id === individual.id) return false;
+      const shareFather = individual.father_id && ind.father_id === individual.father_id;
+      const shareMother = individual.mother_id && ind.mother_id === individual.mother_id;
+      return shareFather || shareMother;
+    });
+    
+    // Ensure unique siblings
+    const uniqueSiblings = Array.from(new Map(siblingList.map(s => [s.id, s])).values());
+    
+    return uniqueSiblings.sort((a, b) => {
+      const dateA = a?.birth_date || '9999-12-31';
+      const dateB = b?.birth_date || '9999-12-31';
+      return dateA.localeCompare(dateB);
+    });
+  }, [individual?.id, individual?.father_id, individual?.mother_id, individuals]);
+
   const fetchEvents = async (id: string) => {
     try {
       const { data, error } = await supabase
@@ -149,10 +174,18 @@ export default function IndividualDetail({
           </div>
 
           <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-accent-tan rounded-full mx-auto mb-4 border-4 border-white shadow-md flex items-center justify-center">
-              <User size={32} className="text-white" />
+            <div className="w-24 h-24 bg-accent-tan rounded-2xl mx-auto mb-4 border-4 border-white shadow-xl flex items-center justify-center overflow-hidden relative group">
+              <img 
+                src={individual.profile_photo_url || DEFAULT_PHOTO} 
+                alt={individual.name}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.src = DEFAULT_PHOTO;
+                }}
+              />
             </div>
-            <h2 className="text-xl font-bold text-ink">{individual.name}</h2>
+            <h2 className="text-xl font-bold text-ink leading-tight px-4">{individual.name}</h2>
             
             <div className="mt-2 flex items-center justify-center gap-2">
               <span className={cn(
@@ -231,11 +264,60 @@ export default function IndividualDetail({
             </div>
             
             {individual.is_verified && (
-              <div className="mt-3 flex items-center justify-center gap-1.5 text-verified-green">
-                <ShieldCheck size={14} />
-                <span className="text-[10px] font-bold uppercase tracking-wider">
-                  Verified by: {individual.verified_by || 'System'}
-                </span>
+              <div className="mt-4 p-3 bg-verified-green/5 border border-verified-green/20 rounded-xl max-w-[280px] mx-auto group cursor-help relative">
+                <div className="flex items-center justify-center gap-1.5 text-verified-green">
+                  <ShieldCheck size={16} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider italic">Data Terverifikasi</span>
+                </div>
+                
+                {/* Verification Detail Tooltip-like Info */}
+                <div className="mt-1 flex flex-col items-center">
+                  <span className="text-[9px] text-ink-light font-bold flex items-center gap-1">
+                    <FileText size={10} /> {individual.verification_type || 'Manuskrip'}
+                  </span>
+                  {isAdmin && individual.verification_source && (
+                    <a 
+                      href={individual.verification_source} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-[8px] text-primary-olive font-bold underline decoration-primary-olive/30 truncate max-w-full px-2 mt-0.5 hover:text-ink transition-colors flex items-center gap-1"
+                    >
+                      <Link2 size={8} /> Klik Lihat Data
+                    </a>
+                  )}
+                  {individual.verified_by && (
+                    <div className="mt-1 pt-1 border-t border-verified-green/10 w-full text-[8px] text-verified-green font-bold text-center">
+                      Paraf: {individual.verified_by}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {isAdmin && (individual.economic_status || individual.occupation) && (
+              <div className="mt-3 flex flex-col items-center gap-2">
+                {individual.economic_status && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-border-olive rounded-full shadow-sm text-ink-light">
+                    <CreditCard size={12} className="text-primary-olive" />
+                    <span className="text-[9px] font-bold uppercase tracking-widest">Ekonomi:</span>
+                    <span className={cn(
+                      "text-[9px] font-black uppercase whitespace-nowrap",
+                      individual.economic_status === 'Kaya' ? 'text-emerald-600' : 
+                      individual.economic_status === 'Menengah' ? 'text-primary-olive' : 'text-rose-500'
+                    )}>
+                      {individual.economic_status}
+                    </span>
+                  </div>
+                )}
+                {individual.occupation && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-border-olive rounded-full shadow-sm text-ink-light">
+                    <Briefcase size={12} className="text-primary-olive" />
+                    <span className="text-[9px] font-bold uppercase tracking-widest">Pekerjaan:</span>
+                    <span className="text-[9px] font-black uppercase tracking-tight text-ink">
+                      {individual.occupation}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -272,7 +354,7 @@ export default function IndividualDetail({
                   )}
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Pasangan</span>
+                  <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Suami/Istri</span>
                   <div className="flex flex-col gap-1">
                     {spousesWithMarriage.length > 0 ? spousesWithMarriage.map(({ spouse, marriage }) => (
                       <div key={marriage.id} className="flex flex-col">
@@ -288,6 +370,23 @@ export default function IndividualDetail({
                           </span>
                         )}
                       </div>
+                    )) : <span className="font-medium text-ink opacity-40">-</span>}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Saudara Kandung/Tiri ({siblings.length})</span>
+                  <div className="max-h-32 overflow-y-auto space-y-1 pr-2 mt-1">
+                    {siblings.length > 0 ? siblings.map(s => (
+                      <button 
+                        key={s.id} 
+                        onClick={() => onSelectIndividual?.(s)}
+                        className="w-full flex items-center gap-2 group text-left"
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full ${s.gender === 'M' ? 'bg-blue-400' : 'bg-rose-400'}`} />
+                        <span className="text-ink font-medium leading-tight group-hover:text-primary-olive transition-colors">
+                          {s.name}
+                        </span>
+                      </button>
                     )) : <span className="font-medium text-ink opacity-40">-</span>}
                   </div>
                 </div>
