@@ -69,6 +69,13 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     const nodes: Node[] = [];
     const edges: Edge[] = [];
     const indMap = new Map(individuals.map(i => [i.id, i]));
+    const marriageMap = new Map<string, Marriage[]>();
+    marriages.forEach(m => {
+      if (!marriageMap.has(m.husband_id)) marriageMap.set(m.husband_id, []);
+      if (!marriageMap.has(m.wife_id)) marriageMap.set(m.wife_id, []);
+      marriageMap.get(m.husband_id)!.push(m);
+      marriageMap.get(m.wife_id)!.push(m);
+    });
     
     // Constants for layout
     const NODE_WIDTH = 240; 
@@ -84,17 +91,6 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     if (selectedIndividualId) {
       highlightedNodeIds.add(selectedIndividualId);
       
-      // Spouses & Marriages of the selected individual
-      marriages.forEach(m => {
-        if (m.husband_id === selectedIndividualId || m.wife_id === selectedIndividualId) {
-          const spouseId = m.husband_id === selectedIndividualId ? m.wife_id : m.husband_id;
-          if (indMap.has(spouseId)) {
-            highlightedNodeIds.add(spouseId);
-            // We'll also use this in the marriage edge loop below
-          }
-        }
-      });
-      
       // Ancestors
       const ancestorVisited = new Set<string>();
       const findAncestors = (id: string) => {
@@ -102,6 +98,8 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
         ancestorVisited.add(id);
         const ind = indMap.get(id);
         if (!ind) return;
+
+        // Biological Parents
         if (ind.father_id && indMap.has(ind.father_id)) {
           highlightedNodeIds.add(ind.father_id);
           ancestorEdges.add(`e-f-${ind.father_id}-${id}`);
@@ -112,8 +110,19 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
           ancestorEdges.add(`e-m-${ind.mother_id}-${id}`);
           findAncestors(ind.mother_id);
         }
+
+        // Traverse spouses - if a spouse is on a primary bloodline, continue heritage highlight through them
+        const mList = marriageMap.get(id) || [];
+        mList.forEach(m => {
+          const spouseId = m.husband_id === id ? m.wife_id : m.husband_id;
+          const spousePath = shortestPaths[spouseId] || '';
+          // If spouse is part of primary lineage, include them in the highlight trail
+          if (indMap.has(spouseId) && !spousePath.includes('+') && !ancestorVisited.has(spouseId)) {
+            highlightedNodeIds.add(spouseId);
+            findAncestors(spouseId);
+          }
+        });
       };
-      findAncestors(selectedIndividualId);
 
       // Descendants - Optimized with childMap
       const descendantVisited = new Set<string>();
@@ -127,6 +136,20 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
           findDescendants(childId);
         });
       };
+
+      // Spouses & Marriages of the selected individual
+      marriages.forEach(m => {
+        if (m.husband_id === selectedIndividualId || m.wife_id === selectedIndividualId) {
+          const spouseId = m.husband_id === selectedIndividualId ? m.wife_id : m.husband_id;
+          if (indMap.has(spouseId)) {
+            highlightedNodeIds.add(spouseId);
+            // Also show descendants of the spouse (step-children)
+            findDescendants(spouseId);
+          }
+        }
+      });
+      
+      findAncestors(selectedIndividualId);
       findDescendants(selectedIndividualId);
     }
     

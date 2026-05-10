@@ -91,31 +91,59 @@ export function calculateGenerations(allIndividuals: Individual[], marriages: Ma
     });
   }
 
-  // 2. Handle In-laws and isolated nodes (sync levels)
+  // 2. Handle In-laws, secondary marriages and isolated nodes (iterative sync)
   let changed = true;
   let iterations = 0;
-  while (changed && iterations < 10) {
+  while (changed && iterations < 15) {
     changed = false;
     iterations++;
+    
+    // Spouse sync
     marriages.forEach(m => {
       const hL = levels[m.husband_id];
       const wL = levels[m.wife_id];
       
-      // Case 1: Husband has a level, Wife does not (In-law)
+      // Case 1: Husband has a level, Wife does not
       if (hL !== undefined && wL === undefined) {
         levels[m.wife_id] = hL;
-        shortestPaths[m.wife_id] = shortestPaths[m.husband_id] ? `${shortestPaths[m.husband_id]}+` : 'Root+';
+        const hPath = shortestPaths[m.husband_id];
+        // If husband is already an in-law (contains +), use '-' for spouse-of-inlaw
+        const suffix = hPath && hPath.includes('+') ? '-' : '+';
+        shortestPaths[m.wife_id] = hPath ? `${hPath}${suffix}` : 'Root+';
         changed = true;
       }
-      // Case 2: Wife has a level, Husband does not (In-law)
+      // Case 2: Wife has a level, Husband does not
       else if (wL !== undefined && hL === undefined) {
         levels[m.husband_id] = wL;
-        shortestPaths[m.husband_id] = shortestPaths[m.wife_id] ? `${shortestPaths[m.wife_id]}+` : 'Root+';
+        const wPath = shortestPaths[m.wife_id];
+        const suffix = wPath && wPath.includes('+') ? '-' : '+';
+        shortestPaths[m.husband_id] = wPath ? `${wPath}${suffix}` : 'Root+';
         changed = true;
       }
-      // Case 3: Both have levels but we are NOT syncing them anymore 
-      // to avoid pulling a G4 up to G6 just because of a spouse.
-      // Visualization will handle the vertical displacement.
+    });
+
+    // 3. Child propagation for newly synced "Outer" parents
+    allIndividuals.forEach(ind => {
+      if (levels[ind.id] !== undefined) return;
+
+      const fL = ind.father_id ? levels[ind.father_id] : undefined;
+      const mL = ind.mother_id ? levels[ind.mother_id] : undefined;
+      
+      if (fL !== undefined || mL !== undefined) {
+        const parentId = fL !== undefined ? ind.father_id! : ind.mother_id!;
+        const parentLevel = levels[parentId];
+        const parentPath = shortestPaths[parentId];
+        
+        levels[ind.id] = parentLevel + 1;
+        
+        // Find sibling index for stable path
+        const siblings = childMap.get(parentId) || [];
+        const myIndex = siblings.indexOf(ind.id);
+        const char = toAlphaNumeric(myIndex !== -1 ? myIndex + 1 : 0);
+        
+        shortestPaths[ind.id] = `${parentPath}${char}`;
+        changed = true;
+      }
     });
   }
 
@@ -267,8 +295,15 @@ export function generateGenealogyIDs(
             .sort((a, b) => (a.marriage_date || a.created_at || '').localeCompare(b.marriage_date || b.created_at || ''));
           
           const mIndex = allSpouseMarriages.findIndex(sm => sm.id === m.id);
-          const plusSuffix = '+'.repeat(mIndex !== -1 ? mIndex + 1 : 1);
-          spousePaths.forEach(p => alphaPaths.push(`${p}${plusSuffix}`));
+          
+          // If spouse is already an in-law, use '-' suffix for nested in-laws
+          let suffix = '';
+          for (let i = 0; i <= mIndex; i++) {
+            const isNested = spousePaths.some(p => p.includes('+'));
+            suffix += (isNested ? '-' : '+');
+          }
+          
+          spousePaths.forEach(p => alphaPaths.push(`${p}${suffix}`));
         }
       }
     }
