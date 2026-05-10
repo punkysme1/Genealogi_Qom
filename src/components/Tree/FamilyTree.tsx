@@ -84,6 +84,17 @@ function FamilyTreeContent({ individuals, marriages, onSelectIndividual, searchQ
     if (selectedIndividualId) {
       highlightedNodeIds.add(selectedIndividualId);
       
+      // Spouses & Marriages of the selected individual
+      marriages.forEach(m => {
+        if (m.husband_id === selectedIndividualId || m.wife_id === selectedIndividualId) {
+          const spouseId = m.husband_id === selectedIndividualId ? m.wife_id : m.husband_id;
+          if (indMap.has(spouseId)) {
+            highlightedNodeIds.add(spouseId);
+            // We'll also use this in the marriage edge loop below
+          }
+        }
+      });
+      
       // Ancestors
       const ancestorVisited = new Set<string>();
       const findAncestors = (id: string) => {

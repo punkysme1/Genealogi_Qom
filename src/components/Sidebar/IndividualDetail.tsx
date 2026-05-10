@@ -395,19 +395,82 @@ export default function IndividualDetail({
                     maybe we should just keep the list for now but remove any header that looks like a button. */}
                 <div className="flex flex-col gap-0.5 pt-2">
                   <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Keturunan ({children.length})</span>
-                  <div className="max-h-32 overflow-y-auto space-y-1 pr-2 mt-1">
-                    {children.length > 0 ? children.map(c => (
-                      <button 
-                        key={c.id} 
-                        onClick={() => onSelectIndividual?.(c)}
-                        className="w-full flex items-center gap-2 group text-left"
-                      >
-                        <div className={`w-1.5 h-1.5 rounded-full ${c.gender === 'M' ? 'bg-blue-400' : 'bg-rose-400'}`} />
-                        <span className="text-ink font-medium leading-tight group-hover:text-primary-olive transition-colors">
-                          {c.name}
-                        </span>
-                      </button>
-                    )) : <span className="text-ink-light italic text-[11px]">Belum ada data</span>}
+                  <div className="max-h-64 overflow-y-auto space-y-3 pr-2 mt-2">
+                    {children.length > 0 ? (
+                      spousesWithMarriage.length > 1 ? (
+                        // Group by spouse
+                        spousesWithMarriage.map(({ spouse, marriage }) => {
+                          const childrenWithThisSpouse = children.filter(c => 
+                            c.father_id === spouse?.id || c.mother_id === spouse?.id ||
+                            // Special case: if children are linked to a marriage, but here we use parent IDs
+                            (individual.gender === 'M' ? c.mother_id === spouse?.id : c.father_id === spouse?.id)
+                          );
+                          
+                          if (childrenWithThisSpouse.length === 0) return null;
+
+                          return (
+                            <div key={marriage.id} className="bg-bg/40 p-2 rounded-lg border border-border-olive/20">
+                              <p className="text-[9px] font-black uppercase text-primary-olive/60 mb-1.5 italic">
+                                Dari {spouse?.name?.split(' ').slice(0, 2).join(' ')}:
+                              </p>
+                              <div className="space-y-1">
+                                {childrenWithThisSpouse.map(c => (
+                                  <button 
+                                    key={c.id} 
+                                    onClick={() => onSelectIndividual?.(c)}
+                                    className="w-full flex items-center gap-2 group text-left"
+                                  >
+                                    <div className={`w-1.5 h-1.5 rounded-full ${c.gender === 'M' ? 'bg-blue-400' : 'bg-rose-400'}`} />
+                                    <span className="text-[12px] text-ink font-medium leading-tight group-hover:text-primary-olive transition-colors">
+                                      {c.name}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        // Simple list if only one spouse or none
+                        children.map(c => (
+                          <button 
+                            key={c.id} 
+                            onClick={() => onSelectIndividual?.(c)}
+                            className="w-full flex items-center gap-2 group text-left"
+                          >
+                            <div className={`w-1.5 h-1.5 rounded-full ${c.gender === 'M' ? 'bg-blue-400' : 'bg-rose-400'}`} />
+                            <span className="text-[12px] text-ink font-medium leading-tight group-hover:text-primary-olive transition-colors">
+                              {c.name}
+                            </span>
+                          </button>
+                        ))
+                      )
+                    ) : <span className="text-ink-light italic text-[11px]">Belum ada data</span>}
+                    
+                    {/* Add children without recognized secondary parent if they exist */}
+                    {children.length > 0 && spousesWithMarriage.length > 1 && children.filter(c => {
+                      const otherParentId = individual.gender === 'M' ? c.mother_id : c.father_id;
+                      return !spousesWithMarriage.some(swm => swm.spouse?.id === otherParentId);
+                    }).length > 0 && (
+                      <div className="bg-bg/40 p-2 rounded-lg border border-border-olive/20">
+                        <p className="text-[9px] font-black uppercase text-primary-olive/60 mb-1.5 italic">Lainnya:</p>
+                        {children.filter(c => {
+                          const otherParentId = individual.gender === 'M' ? c.mother_id : c.father_id;
+                          return !spousesWithMarriage.some(swm => swm.spouse?.id === otherParentId);
+                        }).map(c => (
+                          <button 
+                            key={c.id} 
+                            onClick={() => onSelectIndividual?.(c)}
+                            className="w-full flex items-center gap-2 group text-left"
+                          >
+                            <div className={`w-1.5 h-1.5 rounded-full ${c.gender === 'M' ? 'bg-blue-400' : 'bg-rose-400'}`} />
+                            <span className="text-[12px] text-ink font-medium leading-tight group-hover:text-primary-olive transition-colors">
+                              {c.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
