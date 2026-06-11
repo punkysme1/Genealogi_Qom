@@ -29,7 +29,7 @@ interface IndividualDetailProps {
   marriages: Marriage[];
   onClose: () => void;
   isAdmin?: boolean;
-  onEdit?: (individual: Individual) => void;
+  onEdit?: (individual: Individual, actionType?: 'edit' | 'add_child') => void;
   onSelectIndividual?: (individual: Individual) => void;
 }
 
@@ -154,14 +154,24 @@ export default function IndividualDetail({
       className="fixed right-0 top-0 h-full w-full sm:w-[360px] bg-surface shadow-2xl z-[50] overflow-y-auto border-l border-border-olive"
     >
       <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-4 gap-2">
             {isAdmin ? (
-              <button 
-                onClick={() => individual && onEdit?.(individual)}
-                className="flex items-center gap-1.5 px-3 py-1 bg-primary-olive text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary-olive/90 transition-all font-sans"
-              >
-                Edit Data & Linimasa
-              </button>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button 
+                  onClick={() => individual && onEdit?.(individual, 'edit')}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-primary-olive text-white rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-primary-olive/95 transition-all font-sans"
+                  title="Edit data utama & linimasa hidup"
+                >
+                  Edit Data
+                </button>
+                <button 
+                  onClick={() => individual && onEdit?.(individual, 'add_child')}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-600 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-amber-700 transition-all font-sans shadow-sm"
+                  title={`Tambah keturunan/anak untuk ${individual.name}`}
+                >
+                  + Tambah Anak
+                </button>
+              </div>
             ) : (
               <div />
             )}
@@ -394,7 +404,17 @@ export default function IndividualDetail({
                     If the user explicitly said "Remove Children Button", and we don't see a button, 
                     maybe we should just keep the list for now but remove any header that looks like a button. */}
                 <div className="flex flex-col gap-0.5 pt-2">
-                  <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Keturunan ({children.length})</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-ink-light text-[10px] font-bold uppercase tracking-wider">Keturunan ({children.length})</span>
+                    {isAdmin && (
+                      <button
+                        onClick={() => individual && onEdit?.(individual, 'add_child')}
+                        className="text-[10px] text-amber-700 hover:text-amber-800 font-bold hover:underline transition-all"
+                      >
+                        + Tambah Anak
+                      </button>
+                    )}
+                  </div>
                   <div className="max-h-64 overflow-y-auto space-y-3 pr-2 mt-2">
                     {children.length > 0 ? (
                       spousesWithMarriage.length > 1 ? (

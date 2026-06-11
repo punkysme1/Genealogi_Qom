@@ -1,18 +1,19 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Individual, Event, Marriage } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { suggestHenryCode, findSpouse, generateGenealogyIDs, calculateGenerations } from '@/lib/genealogy';
 import { cn, generateRandomSlug } from '@/lib/utils';
-import { X, Save, Trash2, UserPlus, ShieldCheck, AlertCircle, Search, ChevronRight, ArrowLeft, MapPin, RefreshCcw } from 'lucide-react';
+import { X, Save, Trash2, UserPlus, ShieldCheck, AlertCircle, Search, ChevronRight, ArrowLeft, MapPin, RefreshCcw, Upload, Settings, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AdminPanelProps {
   onClose: () => void;
   selectedIndividual?: Individual | null;
+  actionType?: 'edit' | 'add_child';
   onRefresh: () => void;
 }
 
-export default function AdminPanel({ onClose, selectedIndividual: initialSelected, onRefresh }: AdminPanelProps) {
+export default function AdminPanel({ onClose, selectedIndividual: initialSelected, actionType = 'edit', onRefresh }: AdminPanelProps) {
   const [view, setView] = useState<'list' | 'form'>(initialSelected ? 'form' : 'list');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +56,87 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     father_id: '',
     mother_id: '',
   });
+
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const [cloudinaryCloudName, setCloudinaryCloudName] = useState(() => {
+    return (import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string) || localStorage.getItem('cloudinary_cloud_name') || '';
+  });
+  const [cloudinaryUploadPreset, setCloudinaryUploadPreset] = useState(() => {
+    return (import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string) || localStorage.getItem('cloudinary_upload_preset') || '';
+  });
+  const [showCloudinaryConfig, setShowCloudinaryConfig] = useState(false);
+  const [uploadingField, setUploadingField] = useState<'profile_photo_url' | 'verification_source' | null>(null);
+
+  const [cloudinaryTempConfig, setCloudinaryTempConfig] = useState({
+    cloudName: '',
+    uploadPreset: ''
+  });
+
+  const handleSaveCloudinaryConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCloudinaryCloudName(cloudinaryTempConfig.cloudName);
+    setCloudinaryUploadPreset(cloudinaryTempConfig.uploadPreset);
+    localStorage.setItem('cloudinary_cloud_name', cloudinaryTempConfig.cloudName);
+    localStorage.setItem('cloudinary_upload_preset', cloudinaryTempConfig.uploadPreset);
+    setShowCloudinaryConfig(false);
+    
+    // Trigger file selection if we were waiting for setup
+    if (uploadingField === 'profile_photo_url') {
+      setTimeout(() => photoInputRef.current?.click(), 200);
+    } else if (uploadingField === 'verification_source') {
+      setTimeout(() => docInputRef.current?.click(), 200);
+    }
+  };
+
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>, field: 'profile_photo_url' | 'verification_source') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!cloudinaryCloudName || !cloudinaryUploadPreset) {
+      setUploadingField(field);
+      setCloudinaryTempConfig({
+        cloudName: cloudinaryCloudName,
+        uploadPreset: cloudinaryUploadPreset
+      });
+      setShowCloudinaryConfig(true);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('upload_preset', cloudinaryUploadPreset);
+
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`, {
+        method: 'POST',
+        body: formDataUpload,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error?.message || 'Gagal mengupload ke Cloudinary.');
+      }
+
+      const data = await res.json();
+      const secureUrl = data.secure_url;
+
+      setFormData(prev => ({
+        ...prev,
+        [field]: secureUrl
+      }));
+      
+      e.target.value = '';
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      setError(`Gagal Upload: ${err.message || 'Periksa konfigurasi Cloudinary Anda.'}`);
+    } finally {
+      setLoading(false);
+      setUploadingField(null);
+    }
+  };
 
   const [editingId, setEditingId] = useState<string | null>(initialSelected?.id || null);
   const [marriages, setMarriages] = useState<any[]>([]);
@@ -251,11 +333,37 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
 
   useEffect(() => {
     if (initialSelected) {
-      setFormData(initialSelected);
-      setEditingId(initialSelected.id);
-      setView('form');
+      if (actionType === 'add_child') {
+        const isMale = initialSelected.gender === 'M';
+        setFormData({
+          name: '',
+          slug: '',
+          gender: 'M',
+          birth_date: '',
+          death_date: '',
+          birth_place: '',
+          death_place: '',
+          current_location: '',
+          occupation: '',
+          is_alive: true,
+          is_verified: false,
+          verified_by: '',
+          verification_type: 'Manuskrip',
+          verification_source: '',
+          economic_status: 'Menengah',
+          profile_photo_url: '',
+          father_id: isMale ? initialSelected.id : '',
+          mother_id: isMale ? '' : initialSelected.id,
+        });
+        setEditingId(null);
+        setView('form');
+      } else {
+        setFormData(initialSelected);
+        setEditingId(initialSelected.id);
+        setView('form');
+      }
     }
-  }, [initialSelected]);
+  }, [initialSelected, actionType]);
 
   // Spouse auto-fill logic
   useEffect(() => {
@@ -363,6 +471,32 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     setView('form');
   };
 
+  const handleAddChildFor = (ind: Individual) => {
+    const isMale = ind.gender === 'M';
+    setFormData({
+      name: '',
+      slug: '',
+      gender: 'M',
+      birth_date: '',
+      death_date: '',
+      birth_place: '',
+      death_place: '',
+      current_location: '',
+      occupation: '',
+      is_alive: true,
+      is_verified: false,
+      verified_by: '',
+      verification_type: 'Manuskrip',
+      verification_source: '',
+      economic_status: 'Menengah',
+      profile_photo_url: '',
+      father_id: isMale ? ind.id : '',
+      mother_id: isMale ? '' : ind.id,
+    });
+    setEditingId(null);
+    setView('form');
+  };
+
   const handleAddNew = () => {
     setFormData({
       name: '',
@@ -448,17 +582,19 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {enrichedList.map(ind => (
-                <button 
+                <div 
                   key={ind.id}
-                  onClick={() => handleEditClick(ind)}
-                  className="w-full flex items-center justify-between p-3 bg-white border border-border-olive rounded-xl hover:border-primary-olive transition-all group text-left"
+                  className="w-full flex items-center justify-between p-3 bg-white border border-border-olive rounded-xl hover:border-primary-olive transition-all group"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-accent-tan/20 flex items-center justify-center text-primary-olive font-bold text-xs">
+                  <button 
+                    onClick={() => handleEditClick(ind)}
+                    className="flex-1 flex items-center gap-3 text-left"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-accent-tan/20 flex items-center justify-center text-primary-olive font-bold text-xs shrink-0">
                       {ind.name.charAt(0)}
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-ink">{ind.name}</p>
+                      <p className="text-sm font-bold text-ink group-hover:text-primary-olive transition-colors">{ind.name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[9px] font-mono font-bold bg-primary-olive/10 text-primary-olive px-1 rounded border border-primary-olive/20 uppercase">
                           {ind.genData.displayId || 'ID_PENDING'}
@@ -468,9 +604,26 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                         </span>
                       </div>
                     </div>
+                  </button>
+                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                    <button
+                      type="button"
+                      onClick={() => handleAddChildFor(ind)}
+                      className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold rounded-lg border border-amber-200/50 transition-colors shadow-xs"
+                      title={`Tambah keturunan langsung untuk ${ind.name}`}
+                    >
+                      + Anak
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => handleEditClick(ind)}
+                      className="text-border-olive hover:text-primary-olive transition-colors"
+                      title="Edit data individu"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
                   </div>
-                  <ChevronRight size={16} className="text-border-olive group-hover:text-primary-olive transition-colors" />
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -592,13 +745,49 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-xs font-bold text-ink-light mb-1.5">Link Foto Profil (URL)</label>
-                    <input
-                      value={formData.profile_photo_url || ''}
-                      onChange={(e) => setFormData({ ...formData, profile_photo_url: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
-                      placeholder="https://example.com/photo.jpg"
-                    />
+                    <label className="block text-xs font-bold text-ink-light mb-1.5 flex justify-between items-center">
+                      <span>Foto Profil (URL)</span>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setCloudinaryTempConfig({ cloudName: cloudinaryCloudName, uploadPreset: cloudinaryUploadPreset });
+                          setUploadingField(null);
+                          setShowCloudinaryConfig(true);
+                        }}
+                        className="text-[10px] text-primary-olive hover:underline flex items-center gap-1 font-medium"
+                        title="Metode Cloudinary Upload Setup"
+                      >
+                        <Settings size={11} /> Setup Cloudinary
+                      </button>
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        value={formData.profile_photo_url || ''}
+                        onChange={(e) => setFormData({ ...formData, profile_photo_url: e.target.value })}
+                        className="flex-1 px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none"
+                        placeholder="https://example.com/photo.jpg"
+                      />
+                      <input 
+                        type="file" 
+                        ref={photoInputRef} 
+                        onChange={(e) => handleUploadFile(e, 'profile_photo_url')}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => photoInputRef.current?.click()}
+                        className="px-4 bg-accent-tan/20 border border-accent-tan/30 text-primary-olive text-xs font-bold rounded-lg hover:bg-accent-tan/30 transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                      >
+                        {uploadingField === 'profile_photo_url' ? (
+                          <Loader2 size={14} className="animate-spin text-primary-olive" />
+                        ) : (
+                          <Upload size={14} />
+                        )}
+                        Unggah Foto
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-ink-light mb-1.5">Gender</label>
@@ -750,13 +939,37 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-ink-light mb-1.5 uppercase">Referensi Sumber (Judul Buku/Kode Dokumen)</label>
-                        <input
-                          value={formData.verification_source || ''}
-                          onChange={(e) => setFormData({ ...formData, verification_source: e.target.value })}
-                          className="w-full px-3 py-2 bg-white border border-border-olive rounded-lg text-xs focus:ring-1 focus:ring-primary-olive focus:outline-none italic"
-                          placeholder="E.g. Manuskrip Kertojoyo Bagian A3"
-                        />
+                        <label className="block text-[10px] font-bold text-ink-light mb-1.5 uppercase flex justify-between items-center">
+                          <span>Referensi Sumber (Judul Buku/Kode Dokumen)</span>
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            value={formData.verification_source || ''}
+                            onChange={(e) => setFormData({ ...formData, verification_source: e.target.value })}
+                            className="flex-1 px-3 py-2 bg-white border border-border-olive rounded-lg text-xs focus:ring-1 focus:ring-primary-olive focus:outline-none italic"
+                            placeholder="E.g. Manuskrip Kertojoyo Bagian A3"
+                          />
+                          <input 
+                            type="file" 
+                            ref={docInputRef} 
+                            onChange={(e) => handleUploadFile(e, 'verification_source')}
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => docInputRef.current?.click()}
+                            className="px-3 bg-accent-tan/20 border border-accent-tan/30 text-primary-olive text-[11px] font-bold rounded-lg hover:bg-accent-tan/30 transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                          >
+                            {uploadingField === 'verification_source' ? (
+                              <Loader2 size={12} className="animate-spin text-primary-olive" />
+                            ) : (
+                              <Upload size={12} />
+                            )}
+                            Unggah Dokumen
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -940,6 +1153,89 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
           </div>
         )}
       </motion.div>
+
+      {/* Cloudinary Integration Config Modal */}
+      <AnimatePresence>
+        {showCloudinaryConfig && (
+          <div className="fixed inset-0 bg-ink/65 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 shadow-2xl max-w-md w-full border border-border-olive font-sans relative"
+            >
+              <button 
+                type="button"
+                onClick={() => setShowCloudinaryConfig(false)}
+                className="absolute top-4 right-4 p-1 hover:bg-bg rounded-full transition-colors text-ink-light"
+              >
+                <X size={18} />
+              </button>
+              
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-accent-tan/20 flex items-center justify-center text-primary-olive">
+                  <Settings size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-ink text-base">Konfigurasi Cloudinary</h3>
+                  <p className="text-[10px] text-ink-light italic">Unsigned Upload integration</p>
+                </div>
+              </div>
+
+              <div className="bg-bg p-3.5 rounded-xl border border-border-olive/40 text-xs text-ink mb-5 space-y-1.5 leading-relaxed">
+                <p className="font-semibold text-primary-olive">Cara mendapatkan info ini:</p>
+                <ol className="list-decimal pl-4 space-y-1">
+                  <li>Masuk/Daftar ke akun gratis Anda di <span className="font-mono text-primary-olive text-[11px]">cloudinary.com</span></li>
+                  <li>Ambil <span className="font-medium text-ink">Cloud Name</span> Anda dari dasbor utama.</li>
+                  <li>Buka <span className="font-medium text-ink">Settings (ikon gerigi) &gt; Upload</span>, gulir ke bawah ke <span className="font-medium text-ink">Upload Presets</span>.</li>
+                  <li>Buat preset baru, pastikan Signing Mode diatur ke <span className="font-bold text-amber-700">Unsigned</span>. Salin Nama Preset tersebut.</li>
+                </ol>
+              </div>
+
+              <form onSubmit={handleSaveCloudinaryConfig} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-ink-light mb-1.5 uppercase">Cloud Name</label>
+                  <input 
+                    required
+                    type="text"
+                    value={cloudinaryTempConfig.cloudName}
+                    onChange={(e) => setCloudinaryTempConfig({ ...cloudinaryTempConfig, cloudName: e.target.value.trim() })}
+                    placeholder="e.g. dkarruwdb"
+                    className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-ink-light mb-1.5 uppercase">Upload Preset (Unsigned)</label>
+                  <input 
+                    required
+                    type="text"
+                    value={cloudinaryTempConfig.uploadPreset}
+                    onChange={(e) => setCloudinaryTempConfig({ ...cloudinaryTempConfig, uploadPreset: e.target.value.trim() })}
+                    placeholder="e.g. preset_unsigned_123"
+                    className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm focus:ring-1 focus:ring-primary-olive focus:outline-none font-mono"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCloudinaryConfig(false)}
+                    className="flex-1 py-2.5 border border-border-olive text-ink-light font-bold rounded-lg text-xs hover:bg-bg transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-primary-olive text-white font-bold rounded-lg text-xs hover:bg-primary-olive/95 transition-all shadow-sm"
+                  >
+                    Simpan & Lanjutkan
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

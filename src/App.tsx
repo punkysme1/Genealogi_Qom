@@ -93,6 +93,7 @@ export default function App() {
   const [isLembagaOpen, setIsLembagaOpen] = useState(false);
   const [isRelationshipSearchOpen, setIsRelationshipSearchOpen] = useState(false);
   const [adminTargetIndividual, setAdminTargetIndividual] = useState<Individual | null>(null);
+  const [adminActionType, setAdminActionType] = useState<'edit' | 'add_child'>('edit');
   const [user, setUser] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
@@ -265,13 +266,15 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
-  const handleEditIndividual = (individual: Individual) => {
+  const handleEditIndividual = (individual: Individual, actionType: 'edit' | 'add_child' = 'edit') => {
     setAdminTargetIndividual(individual);
+    setAdminActionType(actionType);
     setIsAdminPanelOpen(true);
   };
 
   const handleAddNew = () => {
     setAdminTargetIndividual(null);
+    setAdminActionType('edit');
     setIsAdminPanelOpen(true);
   };
 
@@ -1013,6 +1016,7 @@ export default function App() {
           <AdminPanel 
             onClose={() => setIsAdminPanelOpen(false)} 
             selectedIndividual={adminTargetIndividual}
+            actionType={adminActionType}
             onRefresh={fetchData}
           />
         )}
