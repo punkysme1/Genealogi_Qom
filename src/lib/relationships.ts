@@ -58,12 +58,17 @@ export function calculateRelationship(
   if (fromLevel === undefined || toLevel === undefined) return noRelation;
 
   // 1. Check Direct Descent
-  const isDescendant = (childId: string, ancestorId: string): boolean => {
+  const isDescendant = (childId: string, ancestorId: string, visited: Set<string> = new Set()): boolean => {
+    if (visited.has(childId) || visited.size > 50) return false;
     const child = indMap.get(childId);
     if (!child) return false;
     if (child.father_id === ancestorId || child.mother_id === ancestorId) return true;
-    return (child.father_id ? isDescendant(child.father_id, ancestorId) : false) || 
-           (child.mother_id ? isDescendant(child.mother_id, ancestorId) : false);
+    
+    const newVisited = new Set(visited);
+    newVisited.add(childId);
+
+    return (child.father_id ? isDescendant(child.father_id, ancestorId, newVisited) : false) || 
+           (child.mother_id ? isDescendant(child.mother_id, ancestorId, newVisited) : false);
   };
 
   if (isDescendant(toId, fromId)) {

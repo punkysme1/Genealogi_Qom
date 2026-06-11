@@ -7,7 +7,7 @@ import FamilyTree from '@/components/Tree/FamilyTree';
 import IndividualDetail from '@/components/Sidebar/IndividualDetail';
 import LoginPage from '@/components/Auth/LoginPage';
 import AdminPanel from '@/components/Admin/AdminPanel';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { generateGenealogyIDs, calculateGenerations } from '@/lib/genealogy';
 import { LembagaProfile } from '@/components/Admin/LembagaProfile';
@@ -763,6 +763,24 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Supabase Mock Mode Alert Banner */}
+      {!isSupabaseConfigured && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between text-[11px] md:text-xs text-amber-800 shrink-0 z-20 gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 relative shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+            <span>
+              <strong>Mode Demo Offline:</strong> Aplikasi di Cloudflare menggunakan <em>mock data</em> karena variabel lingkungan Supabase belum dipasang pada dashboard Cloudflare Pages.
+            </span>
+          </div>
+          <div className="text-[10px] md:text-[11px] text-amber-700 bg-amber-100/60 px-2.5 py-1 rounded border border-amber-200/50">
+            <strong>Solusi:</strong> Daftarkan <code>VITE_SUPABASE_URL</code> & <code>VITE_SUPABASE_ANON_KEY</code> di <strong>Cloudflare Dashboard &gt; Pages &gt; Settings &gt; Environment variables</strong> lalu lakukan build ulang.
+          </div>
+        </div>
+      )}
 
       {/* Mobile Search Bar */}
       <AnimatePresence>
