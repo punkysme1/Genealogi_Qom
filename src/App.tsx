@@ -95,6 +95,8 @@ export default function App() {
   const [adminTargetIndividual, setAdminTargetIndividual] = useState<Individual | null>(null);
   const [adminActionType, setAdminActionType] = useState<'edit' | 'add_child'>('edit');
   const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminAccessMessage, setAdminAccessMessage] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [selectedGen, setSelectedGen] = useState<number | null>(null);
@@ -247,19 +249,34 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-
-    // Check current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let active = true;
+    let roleCheck = 0;
+    const checkAdmin = async (userId: string) => {
+      const currentCheck = ++roleCheck;
+      const { data, error } = await supabase.from('nasab_admins').select('user_id').eq('user_id', userId).maybeSingle();
+      if (!active || currentCheck !== roleCheck) return;
+      setIsAdmin(!error && Boolean(data));
+      setAdminAccessMessage(error ? 'Peran Admin Nasab belum dapat diperiksa. Pastikan migrasi admin sudah diterapkan.' : data ? '' : 'Akun ini belum terdaftar sebagai Admin Nasab.');
+    };
+    const applySession = (session: any) => {
       setUser(session?.user ?? null);
-    });
+      if (!session) {
+        roleCheck++;
+        setIsAdmin(false);
+        setAdminAccessMessage('');
+        setIsAdminPanelOpen(false);
+        return;
+      }
+      roleCheck++;
+      setIsAdmin(false);
+      setAdminAccessMessage('Memeriksa hak Admin Nasab…');
+      setIsLoginOpen(false);
+      window.setTimeout(() => { if (active) void checkAdmin(session.user.id); }, 0);
+    };
+    void supabase.auth.getSession().then(({ data: { session } }) => applySession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => applySession(session));
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session) setIsLoginOpen(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
   const handleLogout = async () => {
@@ -365,13 +382,13 @@ export default function App() {
       filtered = filtered.filter(ind => !ind.is_verified);
     }
 
-    if (user && economicStatusFilter !== 'all') {
+    if (isAdmin && economicStatusFilter !== 'all') {
       filtered = filtered.filter(ind => ind.economic_status === economicStatusFilter);
     }
     
     // Safety deduplication
     return Array.from(new Map(filtered.map(i => [i.id, i])).values());
-  }, [individuals, selectedGen, selectedLoc, lifeStatusFilter, verificationFilter, economicStatusFilter, genMetadata, user]);
+  }, [individuals, selectedGen, selectedLoc, lifeStatusFilter, verificationFilter, economicStatusFilter, genMetadata, isAdmin]);
 
   const renderSidebar = () => (
     <>
@@ -525,7 +542,7 @@ export default function App() {
           </button>
         </div>
 
-        {user && (
+        {isAdmin && (
           <div className="mb-4">
             <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-2 italic">Status Ekonomi (Admin)</h3>
             <div className="grid grid-cols-3 gap-1">
@@ -618,7 +635,7 @@ export default function App() {
         </div>
       </div>
 
-      {user && (
+      {isAdmin && (
         <div className="mt-auto pt-6 border-t border-border-olive space-y-3">
           <button 
             onClick={() => { handleAddNew(); setIsStatsOpen(false); }}
@@ -675,7 +692,7 @@ export default function App() {
             />
           </div>
           <h1 className="text-base md:text-xl font-serif font-bold italic text-primary-olive truncate max-w-[150px] md:max-w-none">Genealogi Kiai Qomaruddin</h1>
-          {user && (
+          {isAdmin && (
             <div className="hidden sm:flex ml-2 md:ml-4 items-center gap-1.5 px-3 py-1 bg-primary-olive/10 text-primary-olive rounded-full text-[9px] font-bold uppercase tracking-widest border border-primary-olive/20 whitespace-nowrap">
               <ShieldCheck size={10} /> Admin
             </div>
@@ -734,7 +751,7 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2">
-            {user ? (
+            {isAdmin ? (
               <div className="flex items-center gap-2">
                 <button 
                   onClick={handleAddNew}
@@ -749,6 +766,15 @@ export default function App() {
                   <LogOut size={18} />
                 </button>
               </div>
+            ) : user ? (
+              <button
+                onClick={handleLogout}
+                className="p-2 hover:bg-rose-50 text-rose-600 rounded-full transition-all"
+                title={adminAccessMessage || 'Akun belum memiliki akses admin Nasab'}
+                aria-label="Keluar dari akun"
+              >
+                <LogOut size={18} />
+              </button>
             ) : (
               <button 
                 onClick={() => setIsLoginOpen(true)}
@@ -766,6 +792,12 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {user && !isAdmin && adminAccessMessage && (
+        <div role="status" className="fixed top-16 right-4 z-[80] max-w-sm rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-lg">
+          {adminAccessMessage}
+        </div>
+      )}
 
       {/* Supabase Mock Mode Alert Banner */}
       {!isSupabaseConfigured && (
@@ -999,7 +1031,7 @@ export default function App() {
               setSelectedIndividual(null);
               navigate('/');
             }}
-            isAdmin={!!user}
+            isAdmin={isAdmin}
             onEdit={handleEditIndividual}
             onSelectIndividual={setSelectedIndividual}
           />
@@ -1012,7 +1044,7 @@ export default function App() {
           <LoginPage onBack={() => setIsLoginOpen(false)} />
         )}
         
-        {isAdminPanelOpen && (
+        {isAdminPanelOpen && isAdmin && (
           <AdminPanel 
             onClose={() => setIsAdminPanelOpen(false)} 
             selectedIndividual={adminTargetIndividual}
