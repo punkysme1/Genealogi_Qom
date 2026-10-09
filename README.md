@@ -15,6 +15,7 @@ View your app in AI Studio: https://ai.studio/apps/e708c8be-1b33-45b6-b9f5-4dfa0
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env.local`.
+   Use the local Supabase URL for development. In Cloudflare Pages, set the production Supabase URL and publishable key as build environment variables.
 3. Run the app:
    `npm run dev`
