@@ -1,3 +1,5 @@
+import { orderValue, sharedOrderValue, usesSeparateOrder, orderUpdates } from '@/lib/child-order-form';
+import { readNumbering } from '@/lib/numbering-client';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Individual, Event, Marriage } from '@/types';
 import { supabase } from '@/lib/supabase';
@@ -18,6 +20,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [numberingRevision, setNumberingRevision] = useState<number | null>(null);
   const [allIndividuals, setAllIndividuals] = useState<Individual[]>([]);
   const [allMarriages, setAllMarriages] = useState<Marriage[]>([]);
   const [searchListQuery, setSearchListQuery] = useState('');
@@ -36,7 +39,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     }));
   }, [filteredList, allIndividuals, allMarriages]);
   
-  const [formData, setFormData] = useState<Partial<Individual>>({
+  const [formData, setFormData] = useState<Partial<Individual> & { order_drafts?: Record<string, string>; separate_order?: boolean }>({
     name: '',
     slug: '',
     gender: 'M',
@@ -159,7 +162,15 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     const { data } = await supabase.from('individuals').select('*').order('name');
     if (data) {
       const uniqueData = Array.from(new Map(data.map(i => [i.id, i])).values());
-      setAllIndividuals(uniqueData);
+      try {
+        const numbered = await readNumbering(supabase, uniqueData);
+        setNumberingRevision(numbered.revision);
+        setAllIndividuals(numbered.people);
+        setFormData(prev => {
+          const current = numbered.people.find(p => p.id === prev.id);
+          return current ? { ...prev, child_order: current.child_order, separate_order: prev.order_drafts ? prev.separate_order : usesSeparateOrder(current) } : prev;
+        });
+      } catch (err) { setNumberingRevision(null); setError((err as Error).message); }
     }
   };
 
@@ -358,7 +369,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
         setEditingId(null);
         setView('form');
       } else {
-        setFormData(initialSelected);
+        setFormData({ ...initialSelected, separate_order: usesSeparateOrder(initialSelected) });
         setEditingId(initialSelected.id);
         setView('form');
       }
@@ -405,6 +416,14 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
         level,
         rank,
         pathIds,
+        numbering_root_id,
+        separate_order,
+        order_drafts,
+        child_order,
+        children_complete,
+        birth_date_status,
+        truncated,
+        warnings,
         ...dataToSubmit 
       } = { ...formData, slug: currentSlug } as any;
       
@@ -422,7 +441,15 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       if (dataToSubmit.profile_photo_url === '') dataToSubmit.profile_photo_url = null;
       if (dataToSubmit.verification_source === '') dataToSubmit.verification_source = null;
 
-      if (editingId) {
+      const orderEntries = orderUpdates(formData);
+      if (orderEntries.length && numberingRevision === null) throw new Error('Belum tersimpan: pembaruan penyimpanan urutan belum tersedia di server. Isian tetap ada; data profil tidak diubah.');
+      if (numberingRevision !== null) {
+        const { error } = await supabase.rpc('qom_nasab_save_profile_order', {
+          p_id: editingId || null, p_profile: dataToSubmit, p_expected_revision: numberingRevision,
+          p_orders: orderEntries.map(([parent_id, value]) => ({ parent_id, position: value === '' ? null : Number(value) }))
+        });
+        if (error) throw new Error(error.code === '40001' ? 'Silsilah berubah sejak formulir dibuka. Muat ulang sebelum menyimpan kembali.' : 'Profil dan urutan belum tersimpan. Periksa layanan penomoran server.');
+      } else if (editingId) {
         const { error } = await supabase.from('individuals').update(dataToSubmit).eq('id', editingId);
         if (error) {
           // If slug column is the problem, try without it as fallback but warn
@@ -466,7 +493,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   };
 
   const handleEditClick = (ind: Individual) => {
-    setFormData(ind);
+    setFormData({ ...ind, separate_order: usesSeparateOrder(ind) });
     setEditingId(ind.id);
     setView('form');
   };
@@ -650,10 +677,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
 
               {/* Section: Hubungan - PRIORITIZED */}
               <div className="space-y-4">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest text-primary-olive border-b border-primary-olive/20 pb-2 italic">Langkah 1: Tentukan Nama Pasangan (Orang Tua)</h3>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-primary-olive border-b border-primary-olive/20 pb-2 italic">Langkah 1: Orang Tua dan Urutan Anak</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-ink-light mb-1.5 underline decoration-accent-tan underline-offset-4">ID Ayah</label>
+                    <label className="block text-xs font-bold text-ink-light mb-1.5 underline decoration-accent-tan underline-offset-4">Ayah</label>
                     <select
                       value={formData.father_id || ''}
                       onChange={(e) => setFormData({ ...formData, father_id: e.target.value })}
@@ -664,9 +691,10 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                         <option key={i.id} value={i.id}>{i.name}</option>
                       ))}
                     </select>
+
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-ink-light mb-1.5 underline decoration-accent-tan underline-offset-4">ID Ibu</label>
+                    <label className="block text-xs font-bold text-ink-light mb-1.5 underline decoration-accent-tan underline-offset-4">Ibu</label>
                     <select
                       value={formData.mother_id || ''}
                       onChange={(e) => setFormData({ ...formData, mother_id: e.target.value })}
@@ -677,6 +705,40 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                         <option key={i.id} value={i.id}>{i.name}</option>
                       ))}
                     </select>
+
+                  </div>
+                  <div className="col-span-2 space-y-3">
+                    <label className="flex items-center gap-3 min-h-11 text-sm cursor-pointer">
+                      <input type="checkbox" checked={usesSeparateOrder(formData)}
+                        aria-controls="child-order-fields"
+                        onChange={e => setFormData(prev => ({ ...prev, separate_order: e.target.checked,
+                          order_drafts: e.target.checked ? prev.order_drafts : {
+                            ...prev.order_drafts,
+                            ...Object.fromEntries([prev.father_id, prev.mother_id].filter(Boolean).map(id => [id, sharedOrderValue(prev)]))
+                          } }))} />
+                      Klik sini jika perkawinan 2–3–4 (urutan anak berbeda)
+                    </label>
+                    <div id="child-order-fields" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {(usesSeparateOrder(formData) ? ['father_id', 'mother_id'] as const : ['shared'] as const).map(field => {
+                        const parent = field === 'shared' ? undefined : formData[field];
+                        const label = field === 'shared' ? 'Anak ke-… dari ayah dan ibu' : `Anak ke-… dari ${allIndividuals.find(i => i.id === parent)?.name || (field === 'father_id' ? 'ayah' : 'ibu')}`;
+                        return <label key={field} className="block text-sm font-medium">
+                          {label}
+                          <input type="number" min="1" max="2147483646" step="1"
+                            disabled={field === 'shared' ? !formData.father_id && !formData.mother_id : !parent}
+                            value={field === 'shared' ? sharedOrderValue(formData) : orderValue(formData, parent)}
+                            onChange={e => { const value = e.target.value; setFormData(prev => ({ ...prev,
+                              order_drafts: { ...prev.order_drafts, ...Object.fromEntries(
+                                (field === 'shared' ? [prev.father_id, prev.mother_id] : [parent]).filter(Boolean).map(id => [id, value])) }
+                            })); }}
+                            placeholder="Belum diketahui" aria-describedby="child-order-availability"
+                            className="block w-full mt-1 px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm disabled:opacity-60" />
+                        </label>;
+                      })}
+                    </div>
+                    <p id="child-order-availability" className="text-sm text-ink-light">
+                      {usesSeparateOrder(formData) ? 'Isi urutan dari setiap orang tua secara terpisah.' : 'Urutan yang sama disimpan untuk ayah dan ibu yang dipilih.'} Kosongkan jika belum diketahui.
+                    </p>
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-ink-light mb-1.5 flex items-center justify-between">

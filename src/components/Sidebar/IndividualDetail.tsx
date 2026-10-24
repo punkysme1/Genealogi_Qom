@@ -1,9 +1,10 @@
+import { childOrder, compareSiblingOrder } from '@/lib/lineage-numbering';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Individual, Marriage, Event } from '@/types';
 import { getJavaneseDescendantTerm } from '@/lib/relationships';
 import { generateGenealogyIDs } from '@/lib/genealogy';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
+import { ProfileEvidence } from './ProfileEvidence';
 import { 
   Calendar, 
   MapPin, 
@@ -44,14 +45,6 @@ export default function IndividualDetail({
   onEdit,
   onSelectIndividual
 }: IndividualDetailProps) {
-  const [events, setEvents] = useState<Event[]>([]);
-
-  useEffect(() => {
-    if (individual?.id) {
-      fetchEvents(individual.id);
-    }
-  }, [individual?.id]);
-
   const { 
     level,
     baseId, 
@@ -59,9 +52,10 @@ export default function IndividualDetail({
     displayId, 
     shortestPath, 
     alphaPaths
+    , truncated, warnings
   } = useMemo(() => {
     if (!individual) {
-      return { level: 0, baseId: '-', pathIds: [], displayId: '-', shortestPath: '', alphaPaths: [] };
+      return { level: 0, baseId: '-', pathIds: [], displayId: '-', shortestPath: '', alphaPaths: [], truncated: false, warnings: [] as string[] };
     }
     
     return generateGenealogyIDs(individual, individuals, marriages);
@@ -93,8 +87,8 @@ export default function IndividualDetail({
     const uniqueChildren = Array.from(new Map(childList.map(c => [c.id, c])).values());
     
     return uniqueChildren.sort((a, b) => {
-        const dateA = a?.birth_date || '9999-12-31';
-        const dateB = b?.birth_date || '9999-12-31';
+        const dateA = String(childOrder(a, individual.id) ?? 999999).padStart(12, '0');
+        const dateB = String(childOrder(b, individual.id) ?? 999999).padStart(12, '0');
         const nameA = a?.name || '';
         const nameB = b?.name || '';
         return dateA.localeCompare(dateB) || nameA.localeCompare(nameB);
@@ -116,31 +110,9 @@ export default function IndividualDetail({
     const uniqueSiblings = Array.from(new Map(siblingList.map(s => [s.id, s])).values());
     
     return uniqueSiblings.sort((a, b) => {
-      const dateA = a?.birth_date || '9999-12-31';
-      const dateB = b?.birth_date || '9999-12-31';
-      return dateA.localeCompare(dateB);
+      return compareSiblingOrder(a, b);
     });
   }, [individual?.id, individual?.father_id, individual?.mother_id, individuals]);
-
-  const fetchEvents = async (id: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('individual_id', id)
-        .order('date', { ascending: true });
-      
-      if (error) {
-        console.warn('Events table mismatch or missing:', error.message);
-        setEvents([]);
-      } else {
-        const uniqueEvents = Array.from(new Map((data || []).map(e => [e.id, e])).values());
-        setEvents(uniqueEvents);
-      }
-    } catch (err) {
-      setEvents([]);
-    }
-  };
 
   // Guard against missing individual - parent should ideally handle this but we keep a safe fallback
   if (!individual) return null;
@@ -225,13 +197,13 @@ export default function IndividualDetail({
                 <div className="absolute top-full left-0 right-0 mt-2 p-3 bg-ink text-white text-[10px] rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-50 shadow-2xl border border-white/10 leading-relaxed">
                   <p className="font-bold border-b border-white/20 pb-1 mb-2 text-accent-tan">Cara Membaca Kode:</p>
                   <ul className="space-y-1 text-white/80">
-                    <li>• Tiap karakter = 1 Generasi</li>
+                    <li>• Tiap segmen = urutan anak menurut kitab</li>
                     <li>• <span className="text-white font-bold">1-9</span> = Anak ke-1 s/d 9</li>
                     <li>• <span className="text-white font-bold">A-Z</span> = Anak ke-10 s/d 35</li>
                     <li>• <span className="text-white font-bold">(n)</span> = Anak ke-36+ (kembali ke angka)</li>
-                    <li>• <span className="text-white font-bold">+</span> = Pasangan (Menantu)</li>
-                    <li className="pt-1 italic opacity-60 text-[9px]">Contoh: 2(40)+ (Istri pertama dari anak k-40)</li>
-                    <li className="italic opacity-60 text-[9px]">Note: ++ untuk istri ke-2, dst.</li>
+                    <li>• (+) = belum ada jalur keturunan langsung yang tercatat</li>
+                    <li className="pt-1 italic opacity-60 text-[9px]">Contoh: 2(40) = anak ke-40 dari anak ke-2</li>
+                    <li className="italic opacity-60 text-[9px]">Urutan belum diisi: kode belum bernomor.</li>
                   </ul>
                 </div>
               </div>
@@ -239,14 +211,14 @@ export default function IndividualDetail({
               <div className="grid grid-cols-1 gap-2 w-full">
                 <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-border-olive/60">
                   <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1 mb-1">
-                    <Link2 size={10} /> Kode Generasi & Urutan (Base-ID)
+                    <Link2 size={10} /> Generasi dari pangkal
                   </span>
                   <span className="text-[11px] font-bold text-ink text-center">{baseId}</span>
-                  <span className="text-[7px] text-ink-light uppercase font-medium mt-0.5 whitespace-nowrap">Format G[Gen].[No]</span>
+                  <span className="text-[7px] text-ink-light uppercase font-medium mt-0.5 whitespace-nowrap">Jumlah hubungan orang tua–anak</span>
                 </div>
                 <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-border-olive/60">
                   <span className="text-[8px] font-bold text-ink-light uppercase tracking-tighter flex items-center gap-1 mb-1">
-                    <GitBranch size={10} /> Macam Jalur (Format Arab: bin/binti)
+                    <GitBranch size={10} /> Jalur orang tua–anak
                   </span>
                   <div className="flex flex-col gap-2 w-full max-h-48 overflow-y-auto px-2 mt-1">
                     {pathIds && pathIds.length > 0 ? pathIds.map((p, i) => (
@@ -262,17 +234,18 @@ export default function IndividualDetail({
                       </div>
                     )}
                   </div>
-                  <span className="text-[7px] text-ink-light uppercase font-medium mt-1">Ditemukan {pathIds.length} Jalur</span>
+                  <span className="text-[7px] text-ink-light uppercase font-medium mt-1">{truncated ? "Sedikitnya " : "Ditemukan "}{pathIds.length} Jalur</span>
                 </div>
               </div>
             </div>
 
             <div className="mt-4 inline-block bg-primary-olive text-white px-3 py-1 rounded-full text-[11px] font-medium">
-              {shortestPath === 'Root' || shortestPath === 'G0' || shortestPath === '' || level === 0 
-                ? 'Pendiri / Leluhur Utama' 
-                : getJavaneseDescendantTerm(level - 1)}
+              {level === 0 ? 'Pendiri / Leluhur Utama' : level === undefined ? '(+) Tidak ada jalur keturunan langsung yang tercatat' : getJavaneseDescendantTerm(level - 1)}
             </div>
             
+            <p className="text-xs mt-3">Kode berdasarkan urutan bersumber. Versi penomoran resmi belum diterbitkan; tampilan ini bukan surat pengesahan beasiswa.</p>
+            {warnings?.map(message => <p key={message} className="text-xs mt-1 text-amber-800">{message}</p>)}
+            {truncated && <p className="text-xs">Penelusuran mencapai batas; jumlah jalur bukan jumlah keseluruhan.</p>}
             {individual.is_verified && (
               <div className="mt-4 p-3 bg-verified-green/5 border border-verified-green/20 rounded-xl max-w-[280px] mx-auto group cursor-help relative">
                 <div className="flex items-center justify-center gap-1.5 text-verified-green">
@@ -506,6 +479,7 @@ export default function IndividualDetail({
               </section>
             )}
 
+            <ProfileEvidence key={individual.id} personId={individual.id} marriageIds={spousesWithMarriage.map(item => item.marriage.id)} />
             {/* Timeline */}
             <section>
               <h3 className="text-[11px] font-bold uppercase tracking-widest text-ink-light mb-4">Linimasa Hidup</h3>
@@ -519,20 +493,6 @@ export default function IndividualDetail({
                   </div>
                 )}
 
-                {/* Custom Events */}
-                {events.map((event) => (
-                  <div key={event.id} className="relative">
-                    <div className="absolute -left-[25px] top-1 w-2.5 h-2.5 rounded-full bg-primary-olive shadow-sm" />
-                    <p className="text-[10px] font-bold text-primary-olive">{event.date ? (event.date.length === 4 ? event.date : new Date(event.date).getFullYear()) : '—'}</p>
-                    <p className="text-[12px] text-ink font-medium leading-tight">{event.description}</p>
-                    {event.location && (
-                      <p className="text-[10px] text-ink-light italic flex items-center gap-1 mt-0.5">
-                        <MapPin size={8} /> {event.location}
-                      </p>
-                    )}
-                  </div>
-                ))}
-
                 {individual.death_date && (
                   <div className="relative">
                     <div className="absolute -left-[25px] top-1 w-2.5 h-2.5 rounded-full bg-ink-light" />
@@ -542,7 +502,7 @@ export default function IndividualDetail({
                   </div>
                 )}
 
-                {(!individual.birth_date && !individual.death_date && events.length === 0) && (
+                {(!individual.birth_date && !individual.death_date) && (
                   <p className="text-[11px] text-ink-light italic">Data linimasa belum tersedia</p>
                 )}
               </div>

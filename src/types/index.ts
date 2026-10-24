@@ -1,6 +1,10 @@
-export type Gender = 'M' | 'F';
+export type Gender = 'M' | 'F' | null;
 
 export interface Individual {
+  numbering_root_id?: string | null;
+  child_order?: Record<string, { position: number; source: string; locator: string }>;
+  children_complete?: boolean;
+  birth_date_status?: 'sourced' | 'estimated' | 'placeholder' | 'unknown';
   id: string;
   name: string;
   slug?: string;
@@ -30,7 +34,9 @@ export type RelationshipType =
   | 'AYAH' | 'IBU' | 'ANAK' | 'CUCU' | 'KAKEK' | 'NENEK' 
   | 'PAMAN' | 'BIBI' | 'KEPONAKAN' | 'SEPUPU' | 'SAUDARA'
   | 'CAK' | 'DEK' | 'PAKDE' | 'BUDHE' | 'PAKLEK' | 'BULEK' 
-  | 'MERTUA' | 'IPAR' | 'MENANTU' | 'TIDAK_ADA_HUBUNGAN';
+  | 'MERTUA' | 'IPAR' | 'MENANTU' | 'TIDAK_ADA_HUBUNGAN'
+  | 'DIRI_SENDIRI' | 'LELUHUR' | 'KETURUNAN' | 'PASANGAN' | 'BESAN' | 'PRIPEAN'
+  | 'TIRI' | 'ANGKAT' | 'KERABAT';
 
 export interface RelationshipResult {
   fromId: string;
@@ -39,7 +45,21 @@ export interface RelationshipResult {
   distance: number;
   description: string;
   commonAncestorId?: string;
+  label?: string;
+  paths?: KinshipPath[];
+  warnings?: string[];
+  truncated?: boolean;
 }
+
+export interface KinshipStep {
+  from: string;
+  to: string;
+  kind: 'parent' | 'child' | 'spouse' | 'adoptive_parent' | 'adopted_child';
+  recordId: string;
+  field: string;
+}
+export interface KinshipPath { ids: string[]; steps: KinshipStep[] }
+export interface Adoption { id: string; parent_id: string; child_id: string }
 
 export interface Marriage {
   id: string;

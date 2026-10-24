@@ -1,0 +1,25 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import { PGlite } from '../../../../tmp/identity-mention-validator/node_modules/@electric-sql/pglite/dist/index.js';
+const db = new PGlite();
+await db.exec(`CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT NULL::uuid $$;
+CREATE TABLE public.nasab_admins(user_id uuid PRIMARY KEY REFERENCES auth.users);
+CREATE TABLE public.individuals(id uuid PRIMARY KEY);
+ALTER TABLE public.individuals ENABLE ROW LEVEL SECURITY;
+CREATE POLICY fixture_policy ON public.individuals USING(auth.uid()=id);`);
+const sql=fs.readFileSync(new URL('./numbering-fingerprint.sql',import.meta.url),'utf8');
+const fingerprint=async path=>{
+  await db.exec(`BEGIN READ ONLY; SET LOCAL search_path=${path};`);
+  const value=(await db.query(sql)).rows[0].md5;
+  await db.exec('COMMIT;');return value;
+};
+assert.notEqual(await fingerprint('public'),await fingerprint('public,auth'));
+await db.exec('SET search_path=public,auth;');
+const a=await fingerprint("''");
+await db.exec('SET search_path=public;');
+assert.equal(a,await fingerprint("''"));
+await db.exec('ALTER TABLE public.individuals ADD COLUMN actual_change text;');
+assert.notEqual(a,await fingerprint("''"));
+console.log('PASS: reproduced search_path mismatch; normalization matches; actual schema drift still rejected.');
+await db.close();

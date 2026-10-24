@@ -1,13 +1,14 @@
 import * as React from 'react';
 import { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Individual, Marriage } from '@/types';
+import { Individual, Marriage, Adoption } from '@/types';
 import { MOCK_INDIVIDUALS, MOCK_MARRIAGES } from '@/lib/mockData';
 import FamilyTree from '@/components/Tree/FamilyTree';
 import IndividualDetail from '@/components/Sidebar/IndividualDetail';
 import LoginPage from '@/components/Auth/LoginPage';
 import AdminPanel from '@/components/Admin/AdminPanel';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, nasabReadMode } from '@/lib/supabase';
+import { readFamily, NasabReadError } from '@/lib/nasab-contract';
 import { cn } from '@/lib/utils';
 import { generateGenealogyIDs, calculateGenerations } from '@/lib/genealogy';
 import { LembagaProfile } from '@/components/Admin/LembagaProfile';
@@ -84,8 +85,11 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [individuals, setIndividuals] = useState<Individual[]>(MOCK_INDIVIDUALS);
-  const [marriages, setMarriages] = useState<Marriage[]>(MOCK_MARRIAGES);
+  const [individuals, setIndividuals] = useState<Individual[]>(isSupabaseConfigured ? [] : MOCK_INDIVIDUALS);
+  const [marriages, setMarriages] = useState<Marriage[]>(isSupabaseConfigured ? [] : MOCK_MARRIAGES);
+  const [adoptions, setAdoptions] = useState<Adoption[]>([]);
+  const [dataError, setDataError] = useState('');
+  const loadSequence = React.useRef(0);
   const [selectedIndividual, setSelectedIndividual] = useState<Individual | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -183,30 +187,23 @@ export default function App() {
   }, [searchQuery]);
 
   const fetchData = async () => {
+    if (!isSupabaseConfigured) return;
+    const sequence = ++loadSequence.current;
+    setDataError('');
     try {
-      // Fetch Individuals
-      const { data: indData, error: indError } = await supabase
-        .from('individuals')
-        .select('*')
-        .order('created_at', { ascending: true });
-      
-      if (indError) throw indError;
-      if (indData) {
-        setIndividuals(Array.from(new Map(indData.map(i => [i.id, i])).values()));
-      }
-
-      // Fetch Marriages
-      const { data: mrgData, error: mrgError } = await supabase
-        .from('marriages')
-        .select('*');
-      
-      if (mrgError) {
-        console.warn('Marriage table might not exist yet:', mrgError);
-      } else if (mrgData) {
-        setMarriages(Array.from(new Map(mrgData.map(m => [m.id, m])).values()));
-      }
-    } catch (err) {
-      console.error('Error fetching data, using mock data:', err);
+      const data = await readFamily(supabase, undefined, nasabReadMode);
+      if (sequence !== loadSequence.current) return;
+      setIndividuals(data.people);
+      setMarriages(data.marriages);
+      setAdoptions(data.adoptions);
+      setSelectedIndividual(current => current ? data.people.find(p => p.id === current.id) || null : null);
+    } catch (error) {
+      if (sequence !== loadSequence.current) return;
+      setIndividuals([]);
+      setMarriages([]);
+      setAdoptions([]);
+      setSelectedIndividual(null);
+      setDataError(error instanceof NasabReadError ? error.message : 'Data Nasab belum dapat dimuat. Silakan coba lagi.');
     }
   };
 
@@ -799,6 +796,7 @@ export default function App() {
         </div>
       )}
 
+      {dataError && <div role="alert" className="z-20 bg-rose-50 text-rose-900 p-4 text-sm">{dataError} <button className="underline font-bold p-2" onClick={fetchData}>Coba lagi</button></div>}
       {/* Supabase Mock Mode Alert Banner */}
       {!isSupabaseConfigured && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between text-[11px] md:text-xs text-amber-800 shrink-0 z-20 gap-2">
@@ -1060,6 +1058,8 @@ export default function App() {
         {isRelationshipSearchOpen && (
           <RelationshipSearch 
             individuals={individuals}
+            marriages={marriages}
+            adoptions={adoptions}
             onClose={() => setIsRelationshipSearchOpen(false)}
             onSelectIndividual={(id) => {
               const ind = individuals.find(i => i.id === id);
