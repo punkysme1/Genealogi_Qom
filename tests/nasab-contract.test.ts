@@ -29,6 +29,18 @@ test('legacy mode reads existing tables without requiring new contract views', a
   assert.equal(data.people.length, 1);
   assert.deepEqual(data.adoptions, []);
 });
+
+test('dataset reads are paginated and exclude other versions with independent roots', async () => {
+  const rows = Array.from({length: 8}, (_, n) => ({id: id(n + 1), name: `P${n}`, gender: 'M', dataset_id: n < 3 ? 1 : 2}));
+  const result = await readFamily(client({nasab_dataset_people_v1: rows, nasab_dataset_marriages_v1: []}), undefined, 'legacy', {id: 2, root_id: id(4)});
+  assert.equal(result.people.length, 5);
+  assert.ok(result.people.every(p => p.dataset_id === 2 && p.numbering_root_id === id(4)));
+});
+
+test('a parent outside the selected version is rejected rather than silently merged', async () => {
+  const rows = [{id:id(1),name:'Parent',gender:'M',dataset_id:1},{id:id(2),name:'Child',gender:'M',dataset_id:2,father_id:id(1)}];
+  await assert.rejects(readFamily(client({nasab_dataset_people_v1:rows}),undefined,'legacy',{id:2,root_id:null}), /INCONSISTENT_SNAPSHOT/);
+});
 test('contract mode never falls back to legacy after access denial', async () => {
   await assert.rejects(readFamily(client({ individuals: [{ id: id(1), name: 'A', gender: 'M' }] }, '42501')), /ACCESS_DENIED/);
 });

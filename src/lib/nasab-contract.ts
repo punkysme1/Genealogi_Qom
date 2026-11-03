@@ -24,8 +24,9 @@ const legacyResources = { people: 'individuals', marriages: 'marriages', events:
 type RecordWithId = { id: string; [key: string]: unknown };
 
 // Keyset pagination continues until an empty page, including when the server caps page size.
-export async function readContractRows<T>(client: SupabaseClient, resource: Resource, signal?: AbortSignal, filter?: [string, string], mode: NasabReadMode = 'contract'): Promise<T[]> {
-  const table = mode === 'contract' ? resources[resource] : legacyResources[resource as keyof typeof legacyResources];
+export async function readContractRows<T>(client: SupabaseClient, resource: Resource, signal?: AbortSignal, filter?: [string, string], mode: NasabReadMode = 'contract', datasetId?: number): Promise<T[]> {
+  const datasetResources = { people: 'nasab_dataset_people_v1', marriages: 'nasab_dataset_marriages_v1', adoptions: 'nasab_dataset_adoptions_v1' };
+  const table = datasetId !== undefined && resource in datasetResources ? datasetResources[resource as keyof typeof datasetResources] : mode === 'contract' ? resources[resource] : legacyResources[resource as keyof typeof legacyResources];
   if (!table) throw new NasabReadError('CONTRACT_NOT_ENABLED', resource);
   const rows: T[] = [];
   let cursor = '';
@@ -33,6 +34,7 @@ export async function readContractRows<T>(client: SupabaseClient, resource: Reso
     let query = client.from(table).select('*').order('id', { ascending: true }).limit(500);
     if (cursor) query = query.gt('id', cursor);
     if (filter) query = query.eq(filter[0], filter[1]);
+    if (datasetId !== undefined) query = query.eq('dataset_id', datasetId);
     if (signal) query = query.abortSignal(signal);
     let response;
     try { response = await query; } catch { throw new NasabReadError('NETWORK', resource); }
@@ -46,7 +48,7 @@ export async function readContractRows<T>(client: SupabaseClient, resource: Reso
     for (const row of response.data as RecordWithId[]) {
       if (typeof row.id !== 'string' || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(row.id) || row.id <= cursor) throw new NasabReadError('INVALID_ORDER', resource);
       if (resource === 'people' && (typeof row.name !== 'string' || (row.gender !== null && !['M', 'F'].includes(row.gender as string)))) throw new NasabReadError('INVALID_PROFILE', resource);
-      if (resource === 'marriages' && (typeof row.husband_id !== 'string' || typeof row.wife_id !== 'string' || typeof row.is_active !== 'boolean')) throw new NasabReadError('INVALID_FAMILY', resource);
+      if (resource === 'marriages' && (typeof row.husband_id !== 'string' || typeof row.wife_id !== 'string' || (row.is_active !== null && typeof row.is_active !== 'boolean'))) throw new NasabReadError('INVALID_FAMILY', resource);
       if (resource === 'events' && (typeof row.individual_id !== 'string' || typeof row.description !== 'string' || !['birth', 'death', 'marriage', 'education', 'other'].includes(row.type as string))) throw new NasabReadError('INVALID_EVENT', resource);
       if (resource === 'sources' && typeof row.title !== 'string') throw new NasabReadError('INVALID_SOURCE', resource);
       if (resource === 'evidence' && (typeof row.source_id !== 'string' || typeof row.predicate !== 'string' || !['draft', 'reviewed', 'disputed'].includes(row.review_status as string))) throw new NasabReadError('INVALID_EVIDENCE', resource);
@@ -62,17 +64,17 @@ export async function readContractRows<T>(client: SupabaseClient, resource: Reso
   throw new NasabReadError('READ_LIMIT', resource);
 }
 
-export async function readFamily(client: SupabaseClient, signal?: AbortSignal, mode: NasabReadMode = 'contract') {
+export async function readFamily(client: SupabaseClient, signal?: AbortSignal, mode: NasabReadMode = 'contract', dataset?: { id: number; root_id: string | null }) {
   const [people, marriages, adoptions] = await Promise.all([
-    readContractRows<Individual>(client, 'people', signal, undefined, mode), readContractRows<Marriage>(client, 'marriages', signal, undefined, mode),
-    mode === 'contract' ? readContractRows<Adoption>(client, 'adoptions', signal) : Promise.resolve([] as Adoption[]),
+    readContractRows<Individual>(client, 'people', signal, undefined, mode, dataset?.id), readContractRows<Marriage>(client, 'marriages', signal, undefined, mode, dataset?.id),
+    mode === 'contract' || dataset ? readContractRows<Adoption>(client, 'adoptions', signal, undefined, mode, dataset?.id) : Promise.resolve([] as Adoption[]),
   ]);
   const ids = new Set(people.map(p => p.id));
   if (people.some(p => (p.father_id && !ids.has(p.father_id)) || (p.mother_id && !ids.has(p.mother_id))) || marriages.some(m => !ids.has(m.husband_id) || !ids.has(m.wife_id)) || adoptions.some(a => !ids.has(a.parent_id) || !ids.has(a.child_id))) {
     throw new NasabReadError('INCONSISTENT_SNAPSHOT', 'family');
   }
   const numbered = await readNumbering(client, people);
-  return { people: numbered.people, marriages, adoptions };
+  return { people: dataset && dataset.id !== 1 ? numbered.people.map(p => ({ ...p, numbering_root_id: dataset.root_id })) : numbered.people, marriages, adoptions };
 }
 
 export async function readProfileEvidence(client: SupabaseClient, personId: string, marriageIds: string[], signal?: AbortSignal, mode: NasabReadMode = 'contract') {

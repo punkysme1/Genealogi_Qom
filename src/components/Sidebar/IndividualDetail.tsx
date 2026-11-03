@@ -176,7 +176,7 @@ export default function IndividualDetail({
                   ? "bg-zinc-100 text-zinc-500 border-zinc-300" 
                   : "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm shadow-emerald-100"
               )}>
-                {(individual.is_alive === false || individual.death_date) ? 'Sudah Wafat' : 'Masih Hidup'}
+                {(individual.is_alive === false || individual.death_date) ? 'Sudah Wafat' : individual.is_alive === true ? 'Masih Hidup' : 'Status hidup belum diketahui'}
               </span>
               {individual.current_location && individual.is_alive !== false && !individual.death_date && (
                 <span className="flex items-center gap-1 text-[10px] text-ink-light bg-bg px-2 py-1 rounded-full border border-border-olive/30 italic">
@@ -479,6 +479,7 @@ export default function IndividualDetail({
               </section>
             )}
 
+            <a className="block text-sm underline text-primary-olive" href={`https://sanad-131.pages.dev/?nasab=${encodeURIComponent(individual.id)}`} target="_blank" rel="noreferrer">Lihat publikasi keilmuan tokoh di Sanad</a>
             <ProfileEvidence key={individual.id} personId={individual.id} marriageIds={spousesWithMarriage.map(item => item.marriage.id)} />
             {/* Timeline */}
             <section>

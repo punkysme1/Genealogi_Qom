@@ -1,12 +1,14 @@
 export type Gender = 'M' | 'F' | null;
 
 export interface Individual {
+  dataset_id?: number;
   numbering_root_id?: string | null;
   child_order?: Record<string, { position: number; source: string; locator: string }>;
   children_complete?: boolean;
   birth_date_status?: 'sourced' | 'estimated' | 'placeholder' | 'unknown';
   id: string;
   name: string;
+  aliases?: string[];
   slug?: string;
   gender: Gender;
   birth_date?: string;
@@ -17,7 +19,7 @@ export interface Individual {
   education?: string;
   occupation?: string;
   bio?: string;
-  is_alive?: boolean;
+  is_alive?: boolean | null;
   is_verified: boolean;
   verified_by?: string; // Legacy field
   verification_type?: 'Manuskrip' | 'Dokumen' | 'Verifikator';
@@ -62,11 +64,12 @@ export interface KinshipPath { ids: string[]; steps: KinshipStep[] }
 export interface Adoption { id: string; parent_id: string; child_id: string }
 
 export interface Marriage {
+  dataset_id?: number;
   id: string;
   husband_id: string;
   wife_id: string;
   marriage_date?: string;
-  is_active: boolean;
+  is_active: boolean | null;
   created_at: string;
 }
 

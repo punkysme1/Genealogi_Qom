@@ -7,7 +7,7 @@ import FamilyTree from '@/components/Tree/FamilyTree';
 import IndividualDetail from '@/components/Sidebar/IndividualDetail';
 import LoginPage from '@/components/Auth/LoginPage';
 import AdminPanel from '@/components/Admin/AdminPanel';
-import { supabase, isSupabaseConfigured, nasabReadMode } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, isLocalMode, nasabReadMode } from '@/lib/supabase';
 import { readFamily, NasabReadError } from '@/lib/nasab-contract';
 import { cn } from '@/lib/utils';
 import { generateGenealogyIDs, calculateGenerations } from '@/lib/genealogy';
@@ -32,6 +32,8 @@ import {
   ArrowRightLeft
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { INITIAL_DATASET, listDatasets, type Dataset } from '@/lib/datasets';
+const DatabaseManager = React.lazy(() => import('@/components/Admin/DatabaseManager'));
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -83,8 +85,16 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 export default function App() {
-  const navigate = useNavigate();
+  const routerNavigate = useNavigate();
   const location = useLocation();
+  const requestedVersion = Number(new URLSearchParams(location.search).get('database') || 1);
+  const datasetId = Number.isSafeInteger(requestedVersion) && requestedVersion > 0 ? requestedVersion : 1;
+  const navigate = React.useCallback((path: string, options?: { replace?: boolean }) => routerNavigate(`${path}${datasetId === 1 ? '' : `?database=${datasetId}`}`, options), [routerNavigate, datasetId]);
+  const [datasets, setDatasets] = useState<Dataset[]>([INITIAL_DATASET]);
+  const [datasetsAvailable, setDatasetsAvailable] = useState(false);
+  const [dataLoading, setDataLoading] = useState(isSupabaseConfigured);
+  const [isDatabaseManagerOpen, setIsDatabaseManagerOpen] = useState(false);
+  const activeDataset = datasets.find(d => d.id === datasetId) || INITIAL_DATASET;
   const [individuals, setIndividuals] = useState<Individual[]>(isSupabaseConfigured ? [] : MOCK_INDIVIDUALS);
   const [marriages, setMarriages] = useState<Marriage[]>(isSupabaseConfigured ? [] : MOCK_MARRIAGES);
   const [adoptions, setAdoptions] = useState<Adoption[]>([]);
@@ -105,7 +115,7 @@ export default function App() {
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [selectedGen, setSelectedGen] = useState<number | null>(null);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(null);
-  const [lifeStatusFilter, setLifeStatusFilter] = useState<'all' | 'alive' | 'deceased'>('all');
+  const [lifeStatusFilter, setLifeStatusFilter] = useState<'all' | 'alive' | 'deceased' | 'unknown'>('all');
   const [verificationFilter, setVerificationFilter] = useState<'all' | 'verified' | 'unverified'>('all');
   const [economicStatusFilter, setEconomicStatusFilter] = useState<'all' | 'Kaya' | 'Menengah' | 'Miskin'>('all');
   
@@ -168,6 +178,7 @@ export default function App() {
   // Update URL when individual is selected
   useEffect(() => {
     if (selectedIndividual) {
+      if (selectedIndividual.dataset_id && selectedIndividual.dataset_id !== datasetId) return;
       const currentPath = location.pathname;
       const targetPath = `/${selectedIndividual.id}`;
       if (currentPath !== targetPath && !currentPath.includes('admin')) {
@@ -187,11 +198,18 @@ export default function App() {
   }, [searchQuery]);
 
   const fetchData = async () => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured && !isLocalMode) return;
     const sequence = ++loadSequence.current;
     setDataError('');
+    setDataLoading(true);
     try {
-      const data = await readFamily(supabase, undefined, nasabReadMode);
+      const local = isLocalMode ? await import('@/lib/local-datasets') : null;
+      const catalog = local ? { available: true, datasets: await local.listLocalDatasets() } : await listDatasets(supabase);
+      if (sequence !== loadSequence.current) return;
+      setDatasets(catalog.datasets); setDatasetsAvailable(catalog.available);
+      const dataset = catalog.datasets.find(d => d.id === datasetId);
+      if (!dataset) throw new Error('Versi database tidak ditemukan. Pilih database yang tersedia.');
+      const data = local ? await local.readLocalDataset(datasetId) : await readFamily(supabase, undefined, nasabReadMode, catalog.available ? dataset : undefined);
       if (sequence !== loadSequence.current) return;
       setIndividuals(data.people);
       setMarriages(data.marriages);
@@ -203,9 +221,21 @@ export default function App() {
       setMarriages([]);
       setAdoptions([]);
       setSelectedIndividual(null);
-      setDataError(error instanceof NasabReadError ? error.message : 'Data Nasab belum dapat dimuat. Silakan coba lagi.');
+      setDataError(error instanceof Error ? error.message : 'Data Nasab belum dapat dimuat. Silakan coba lagi.');
+    } finally {
+      if (sequence === loadSequence.current) setDataLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadSequence.current++;
+    setSelectedIndividual(null); setSearchQuery(''); setSearchResults([]);
+    setSelectedGen(null); setSelectedLoc(null); setIsAdminPanelOpen(false); setIsRelationshipSearchOpen(false);
+    setLifeStatusFilter('all'); setVerificationFilter('all'); setEconomicStatusFilter('all');
+    if (isSupabaseConfigured || isLocalMode) { setIndividuals([]); setMarriages([]); setAdoptions([]); }
+    void fetchData();
+    return () => { loadSequence.current++; };
+  }, [datasetId]);
 
   useEffect(() => {
     const query = debouncedSearchQuery.trim().toLowerCase();
@@ -245,8 +275,8 @@ export default function App() {
   }, [debouncedSearchQuery, individuals, marriages, genMetadata]);
 
   useEffect(() => {
-    fetchData();
     let active = true;
+    if (!isSupabaseConfigured) return;
     let roleCheck = 0;
     const checkAdmin = async (userId: string) => {
       const currentCheck = ++roleCheck;
@@ -262,6 +292,7 @@ export default function App() {
         setIsAdmin(false);
         setAdminAccessMessage('');
         setIsAdminPanelOpen(false);
+        setIsDatabaseManagerOpen(false);
         return;
       }
       roleCheck++;
@@ -315,7 +346,7 @@ export default function App() {
       // Life status
       if (ind.is_alive === false || ind.death_date) {
         deceasedCount++;
-      } else {
+      } else if (ind.is_alive === true) {
         aliveCount++;
       }
 
@@ -368,9 +399,11 @@ export default function App() {
     }
 
     if (lifeStatusFilter === 'alive') {
-      filtered = filtered.filter(ind => ind.is_alive !== false && !ind.death_date);
+      filtered = filtered.filter(ind => ind.is_alive === true && !ind.death_date);
     } else if (lifeStatusFilter === 'deceased') {
       filtered = filtered.filter(ind => ind.is_alive === false || ind.death_date);
+    } else if (lifeStatusFilter === 'unknown') {
+      filtered = filtered.filter(ind => ind.is_alive == null && !ind.death_date);
     }
 
     if (verificationFilter === 'verified') {
@@ -433,6 +466,7 @@ export default function App() {
             <span className="text-[9px] uppercase font-bold text-ink-light">Wafat</span>
           </button>
         </div>
+        {individuals.length - stats.aliveCount - stats.deceasedCount > 0 && <button onClick={() => setLifeStatusFilter(lifeStatusFilter === 'unknown' ? 'all' : 'unknown')} className="mt-2 min-h-11 w-full rounded-xl border border-border-olive px-3 text-sm">{individuals.length - stats.aliveCount - stats.deceasedCount} belum diketahui</button>}
       </div>
 
       <div>
@@ -789,6 +823,15 @@ export default function App() {
           </div>
         </div>
       </header>
+      <div className="z-20 flex flex-wrap items-center gap-3 border-b border-border-olive bg-surface px-4 py-2 text-sm">
+        <label htmlFor="nasab-database" className="font-semibold">Database</label>
+        <select id="nasab-database" value={datasetId} disabled={dataLoading} onChange={e => routerNavigate(`/?database=${e.target.value}`)} className="min-h-11 max-w-full rounded-lg border border-border-olive bg-white px-3">
+          {datasets.map(d => <option key={d.id} value={d.id}>Versi {d.id} — {d.name}</option>)}
+        </select>
+        <span aria-live="polite" className="text-ink-light">{dataLoading ? 'Memuat database…' : `${individuals.length.toLocaleString('id-ID')} individu · ${marriages.length.toLocaleString('id-ID')} pernikahan`}</span>
+        {(isAdmin || isLocalMode) && <button disabled={dataLoading || !!dataError} onClick={() => setIsDatabaseManagerOpen(true)} className="min-h-11 rounded-lg border border-border-olive px-4 font-semibold text-primary-olive disabled:opacity-50">Impor / ekspor Excel</button>}
+        {isLocalMode && <span className="text-xs text-ink-light">Mode lokal · data tersimpan di browser ini</span>}
+      </div>
 
       {user && !isAdmin && adminAccessMessage && (
         <div role="status" className="fixed top-16 right-4 z-[80] max-w-sm rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-lg">
@@ -798,7 +841,7 @@ export default function App() {
 
       {dataError && <div role="alert" className="z-20 bg-rose-50 text-rose-900 p-4 text-sm">{dataError} <button className="underline font-bold p-2" onClick={fetchData}>Coba lagi</button></div>}
       {/* Supabase Mock Mode Alert Banner */}
-      {!isSupabaseConfigured && (
+      {!isSupabaseConfigured && !isLocalMode && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between text-[11px] md:text-xs text-amber-800 shrink-0 z-20 gap-2">
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 relative shrink-0">
@@ -893,7 +936,7 @@ export default function App() {
                  <div className="max-w-4xl w-full">
                     <div className="mb-12 text-center">
                        <h2 className="text-3xl md:text-5xl font-serif font-bold italic text-primary-olive mb-4">Eksplorasi Genealogi</h2>
-                       <p className="text-ink-light text-lg italic">Menelusuri jejak keturunan Kiai Qomaruddin melalui data yang terverifikasi.</p>
+                       <p className="text-ink-light text-lg italic">Menelusuri jejak keturunan Kiai Qomaruddin melalui hubungan keluarga yang tercatat.</p>
                     </div>
 
                     <div className="relative mb-12">
@@ -944,7 +987,7 @@ export default function App() {
                            }}
                            className="bg-white p-5 rounded-2xl border border-border-olive/20 hover:border-primary-olive/50 hover:shadow-lg transition-all text-left flex flex-col gap-2 group"
                          >
-                            <span className="text-[10px] font-bold text-primary-olive/60 uppercase tracking-widest">{ind.current_location || 'Sampurnan'}</span>
+                            <span className="text-[10px] font-bold text-primary-olive/60 uppercase tracking-widest">{ind.current_location || 'Lokasi belum diketahui'}</span>
                             <h4 className="text-base font-bold text-ink group-hover:text-primary-olive">{ind.name}</h4>
                             <div className="flex justify-between items-center mt-2">
                                <span className="text-[9px] font-mono bg-bg px-2 py-1 rounded">{(generateGenealogyIDs(ind, individuals, marriages, genMetadata.levels, genMetadata.ranks, genMetadata.shortestPaths, true)).displayId}</span>
@@ -1044,12 +1087,20 @@ export default function App() {
         
         {isAdminPanelOpen && isAdmin && (
           <AdminPanel 
+            dataset={datasetsAvailable ? activeDataset : undefined}
             onClose={() => setIsAdminPanelOpen(false)} 
             selectedIndividual={adminTargetIndividual}
             actionType={adminActionType}
             onRefresh={fetchData}
           />
         )}
+
+        {isDatabaseManagerOpen && (isAdmin || isLocalMode) && <React.Suspense fallback={<div role="status" className="fixed bottom-4 right-4 bg-surface p-4 z-50">Memuat pengelola Excel…</div>}><DatabaseManager localMode={isLocalMode} dataset={activeDataset} people={individuals} marriages={marriages} available={datasetsAvailable} onClose={() => setIsDatabaseManagerOpen(false)} onImported={async id => {
+          const catalog = isLocalMode ? { available: true, datasets: await (await import('@/lib/local-datasets')).listLocalDatasets() } : await listDatasets(supabase);
+          setDatasets(catalog.datasets); setDatasetsAvailable(catalog.available);
+          setIsDatabaseManagerOpen(false);
+          routerNavigate(`/?database=${id}`);
+        }}/></React.Suspense>}
 
         {isLembagaOpen && (
           <LembagaProfile onClose={() => setIsLembagaOpen(false)} />

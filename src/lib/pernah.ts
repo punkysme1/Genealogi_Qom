@@ -98,11 +98,12 @@ export function describeKinshipPath(path: KinshipPath, people: Individual[]): st
     const person = map.get(id), parent = map.get(ids[index + 1]);
     let name = person?.name || 'Profil belum tersedia';
     if (!parent) return name;
+    if (person?.father_id !== parent.id) return `${name} — anak dari ${person?.mother_id === parent.id ? 'ibu' : 'orang tua'}:`;
     // Avoid repeating an explicitly stored patronymic when it matches this edge.
     const suffix = name.match(/^(.*?)\s+(?:bin|binti)\s+(.+)$/i);
     if (suffix && suffix[2].trim().toLocaleLowerCase() === parent.name.trim().toLocaleLowerCase()) name = suffix[1];
     else if (suffix) name = `“${name}”`;
-    const link = person?.gender === 'M' ? 'bin' : person?.gender === 'F' ? 'binti' : '[bin/binti belum diketahui]';
+    const link = person?.gender === 'M' ? 'bin' : person?.gender === 'F' ? 'binti' : '— anak dari ayah:';
     return `${name} ${link}`;
   }).join(' ');
   for (let i = 0; i < path.steps.length; i++) {

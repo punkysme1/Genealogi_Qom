@@ -77,7 +77,7 @@ const IndividualNode = memo(({ data }: IndividualNodeProps) => {
             </div>
           )}
           <p className="text-[10px] text-ink-light font-bold flex items-center gap-1 truncate mt-1">
-            Status {(individual.is_alive === false || individual.death_date) ? 'Sudah Wafat' : 'Masih Hidup'}
+            Status {(individual.is_alive === false || individual.death_date) ? 'Sudah Wafat' : individual.is_alive === true ? 'Masih Hidup' : 'belum diketahui'}
             <span className="opacity-30">-</span>
             <span className="truncate italic font-medium">({individual.current_location || individual.death_place || '?'})</span>
           </p>

@@ -7,15 +7,17 @@ import { suggestHenryCode, findSpouse, generateGenealogyIDs, calculateGeneration
 import { cn, generateRandomSlug } from '@/lib/utils';
 import { X, Save, Trash2, UserPlus, ShieldCheck, AlertCircle, Search, ChevronRight, ArrowLeft, MapPin, RefreshCcw, Upload, Settings, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { readAdminDatasetRows, type Dataset } from '@/lib/datasets';
 
 interface AdminPanelProps {
+  dataset?: Dataset;
   onClose: () => void;
   selectedIndividual?: Individual | null;
   actionType?: 'edit' | 'add_child';
   onRefresh: () => void;
 }
 
-export default function AdminPanel({ onClose, selectedIndividual: initialSelected, actionType = 'edit', onRefresh }: AdminPanelProps) {
+export default function AdminPanel({ onClose, selectedIndividual: initialSelected, actionType = 'edit', onRefresh, dataset }: AdminPanelProps) {
   const [view, setView] = useState<'list' | 'form'>(initialSelected ? 'form' : 'list');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,11 +161,12 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   }, []);
 
   const fetchAllIndividuals = async () => {
-    const { data } = await supabase.from('individuals').select('*').order('name');
-    if (data) {
+    try {
+      const data = await readAdminDatasetRows<Individual>(supabase, 'individuals', dataset);
       const uniqueData = Array.from(new Map(data.map(i => [i.id, i])).values());
       try {
         const numbered = await readNumbering(supabase, uniqueData);
+        if (dataset && dataset.id !== 1) numbered.people = numbered.people.map(p => ({ ...p, numbering_root_id: dataset.root_id }));
         setNumberingRevision(numbered.revision);
         setAllIndividuals(numbered.people);
         setFormData(prev => {
@@ -171,15 +174,15 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
           return current ? { ...prev, child_order: current.child_order, separate_order: prev.order_drafts ? prev.separate_order : usesSeparateOrder(current) } : prev;
         });
       } catch (err) { setNumberingRevision(null); setError((err as Error).message); }
-    }
+    } catch (err) { setError((err as Error).message); }
   };
 
   const fetchAllMarriages = async () => {
-    const { data } = await supabase.from('marriages').select('*');
-    if (data) {
+    try {
+      const data = await readAdminDatasetRows<Marriage>(supabase, 'marriages', dataset);
       const uniqueData = Array.from(new Map(data.map(m => [m.id, m])).values());
       setAllMarriages(uniqueData);
-    }
+    } catch (err) { setError((err as Error).message); }
   };
 
   const fetchEvents = async (id: string) => {
@@ -273,6 +276,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     try {
       const isMale = formData.gender === 'M';
       const marriageData = {
+        ...(dataset ? { dataset_id: dataset.id } : {}),
         husband_id: isMale ? editingId : newSpouseId,
         wife_id: isMale ? newSpouseId : editingId,
         marriage_date: newMarriageDate || null,
@@ -422,11 +426,17 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
         child_order,
         children_complete,
         birth_date_status,
+        dataset_id,
         truncated,
         warnings,
         ...dataToSubmit 
       } = { ...formData, slug: currentSlug } as any;
       
+      if (Array.isArray(dataToSubmit.aliases)) {
+        dataToSubmit.aliases = [...new Set(dataToSubmit.aliases.map((name: string) => name.trim()).filter(Boolean))];
+        if (dataToSubmit.aliases.length > 20 || dataToSubmit.aliases.some((name: string) => name.length > 120) || dataToSubmit.aliases.join(';').length > 2000)
+          throw new Error('Nama lain maksimal 20 nama, masing-masing 120 karakter, dan total 2.000 karakter.');
+      }
       if (dataToSubmit.father_id === '') dataToSubmit.father_id = null;
       if (dataToSubmit.mother_id === '') dataToSubmit.mother_id = null;
       if (dataToSubmit.birth_date === '') dataToSubmit.birth_date = null;
@@ -444,7 +454,8 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       const orderEntries = orderUpdates(formData);
       if (orderEntries.length && numberingRevision === null) throw new Error('Belum tersimpan: pembaruan penyimpanan urutan belum tersedia di server. Isian tetap ada; data profil tidak diubah.');
       if (numberingRevision !== null) {
-        const { error } = await supabase.rpc('qom_nasab_save_profile_order', {
+        const { error } = await supabase.rpc(dataset ? 'qom_nasab_save_dataset_profile' : 'qom_nasab_save_profile_order', {
+          ...(dataset ? { p_dataset: dataset.id } : {}),
           p_id: editingId || null, p_profile: dataToSubmit, p_expected_revision: numberingRevision,
           p_orders: orderEntries.map(([parent_id, value]) => ({ parent_id, position: value === '' ? null : Number(value) }))
         });
@@ -463,12 +474,12 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
           }
         }
       } else {
-        const { error } = await supabase.from('individuals').insert([dataToSubmit]);
+        const { error } = await supabase.from('individuals').insert([{ ...dataToSubmit, ...(dataset ? { dataset_id: dataset.id } : {}) }]);
         if (error) {
           // Fallback if slug column missing
           if (error.message.includes('slug') || error.code === 'PGRST116') {
             const { slug: _, ...noSlugData } = dataToSubmit;
-            const { error: retryError } = await supabase.from('individuals').insert([noSlugData]);
+            const { error: retryError } = await supabase.from('individuals').insert([{ ...noSlugData, ...(dataset ? { dataset_id: dataset.id } : {}) }]);
             if (retryError) throw retryError;
             setError('Catatan: Kolom "slug" tidak ditemukan di database. Data disimpan tanpa slug.');
           } else {
@@ -744,7 +755,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                     <label className="block text-xs font-bold text-ink-light mb-1.5 flex items-center justify-between">
                       <span>Status Kehidupan</span>
                       <span className={formData.is_alive ? "text-emerald-600 font-black" : "text-rose-600 font-black"}>
-                        {formData.is_alive ? 'MASIH HIDUP' : 'SUDAH WAFAT'}
+                        {formData.is_alive === true ? 'MASIH HIDUP' : formData.is_alive === false ? 'SUDAH WAFAT' : 'BELUM DIKETAHUI'}
                       </span>
                     </label>
                     <div className="grid grid-cols-2 gap-2">
@@ -763,11 +774,12 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                         onClick={() => setFormData({...formData, is_alive: false})}
                         className={cn(
                           "py-2.5 rounded-lg border text-xs font-bold transition-all",
-                          !formData.is_alive ? "bg-rose-500 text-white border-rose-600" : "bg-white text-rose-600 border-border-olive"
+                          formData.is_alive === false ? "bg-rose-500 text-white border-rose-600" : "bg-white text-rose-600 border-border-olive"
                         )}
                       >
                         Wafat
                       </button>
+                      <button type="button" onClick={() => setFormData({ ...formData, is_alive: null, death_date: '' })} className="col-span-2 min-h-11 rounded-lg border border-border-olive text-xs font-bold">Belum diketahui</button>
                     </div>
                   </div>
                 </div>
@@ -788,6 +800,14 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                       placeholder="Nama individu baru..."
                     />
                   </div>
+                  {allIndividuals.some(person => Array.isArray(person.aliases)) && <div className="col-span-2">
+                    <label htmlFor="public-person-aliases" className="block text-xs font-bold text-ink-light mb-1.5">Nama lain publik</label>
+                    <input id="public-person-aliases" value={(formData.aliases || []).join(';')}
+                      onChange={e => setFormData({...formData, aliases: e.target.value.split(';')})}
+                      aria-describedby="public-alias-help" maxLength={2000}
+                      className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm" />
+                    <p id="public-alias-help" className="text-xs text-ink-light mt-1">Pisahkan dengan titik koma. Nama ini boleh dibaca pengunjung dan dipakai Nawra untuk mencari tokoh yang sama.</p>
+                  </div>}
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-ink-light mb-1.5 flex justify-between items-center">
                       <span>Custom Slug (Alfanumerik)</span>

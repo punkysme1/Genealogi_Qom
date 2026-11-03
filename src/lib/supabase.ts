@@ -10,6 +10,7 @@ export const isSupabaseConfigured = !!(
   supabaseAnonKey && 
   !supabaseUrl.includes('placeholder')
 );
+export const isLocalMode = import.meta.env.DEV && !isSupabaseConfigured;
 
 if (!isSupabaseConfigured) {
   console.warn(
