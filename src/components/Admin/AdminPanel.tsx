@@ -60,6 +60,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     profile_photo_url: '',
     father_id: '',
     mother_id: '',
+    visibility: 'public',
   });
 
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -200,7 +201,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
         }
         throw error;
       }
-      if (data) setIndividualEvents(data);
+      if (data) setIndividualEvents(data.filter((ev: any) => ev.deleted_at == null));
     } catch (err: any) {
       console.error('Error fetching events:', err);
     }
@@ -216,7 +217,8 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       `)
       .or(`husband_id.eq.${id},wife_id.eq.${id}`);
     if (data) {
-      const uniqueMarriages = Array.from(new Map(data.map(m => [m.id, m])).values());
+      const activeRows = data.filter((m: any) => m.deleted_at == null);
+      const uniqueMarriages = Array.from(new Map(activeRows.map(m => [m.id, m])).values());
       setMarriages(uniqueMarriages);
     }
   };
@@ -235,7 +237,8 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       const eventData = {
         ...newEvent,
         individual_id: editingId,
-        date: newEvent.date === '' ? null : newEvent.date
+        date: newEvent.date === '' ? null : newEvent.date,
+        visibility: formData.visibility === 'private' ? 'private' : 'public',
       };
       const { error } = await supabase.from('events').insert([eventData]);
       if (error) throw error;
@@ -256,7 +259,11 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     if (!confirm('Hapus peristiwa ini?')) return;
     setLoading(true);
     try {
-      const { error } = await supabase.from('events').delete().eq('id', eId);
+      // GAP-02: Soft-delete kompatibel dengan nasab-schema-v1.sql (tanpa hard DELETE)
+      const { error } = await supabase
+        .from('events')
+        .update({ deleted_at: new Date().toISOString(), visibility: 'private' })
+        .eq('id', eId);
       if (error) throw error;
       if (editingId) fetchEvents(editingId);
     } catch (err: any) {
@@ -280,7 +287,8 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
         husband_id: isMale ? editingId : newSpouseId,
         wife_id: isMale ? newSpouseId : editingId,
         marriage_date: newMarriageDate || null,
-        is_active: true
+        is_active: true,
+        visibility: formData.visibility === 'private' ? 'private' : 'public',
       };
       
       const { error } = await supabase.from('marriages').insert([marriageData]);
@@ -314,6 +322,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       verified_by: '',
       father_id: isMale ? (editingId || '') : (spouseId || ''),
       mother_id: isMale ? (spouseId || '') : (editingId || ''),
+      visibility: 'public',
     });
     setEditingId(null);
     setView('form');
@@ -323,9 +332,15 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
     if (!confirm('Hapus data pernikahan ini?')) return;
     setLoading(true);
     try {
-      const { error } = await supabase.from('marriages').delete().eq('id', mId);
+      // GAP-02: Soft-delete kompatibel dengan nasab-schema-v1.sql (tanpa hard DELETE)
+      const { error } = await supabase
+        .from('marriages')
+        .update({ deleted_at: new Date().toISOString(), is_active: false, visibility: 'private' })
+        .eq('id', mId);
       if (error) throw error;
       if (editingId) fetchMarriages(editingId);
+      fetchAllMarriages();
+      onRefresh();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -369,11 +384,12 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
           profile_photo_url: '',
           father_id: isMale ? initialSelected.id : '',
           mother_id: isMale ? '' : initialSelected.id,
+          visibility: 'public',
         });
         setEditingId(null);
         setView('form');
       } else {
-        setFormData({ ...initialSelected, separate_order: usesSeparateOrder(initialSelected) });
+        setFormData({ ...initialSelected, visibility: initialSelected.visibility || 'public', separate_order: usesSeparateOrder(initialSelected) });
         setEditingId(initialSelected.id);
         setView('form');
       }
@@ -450,16 +466,25 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       if (dataToSubmit.bio === '') dataToSubmit.bio = null;
       if (dataToSubmit.profile_photo_url === '') dataToSubmit.profile_photo_url = null;
       if (dataToSubmit.verification_source === '') dataToSubmit.verification_source = null;
+      delete dataToSubmit.deleted_at;
+      delete dataToSubmit.revision;
+      const desiredVisibility: 'public' | 'private' = dataToSubmit.visibility === 'private' ? 'private' : 'public';
+      dataToSubmit.visibility = desiredVisibility;
 
       const orderEntries = orderUpdates(formData);
       if (orderEntries.length && numberingRevision === null) throw new Error('Belum tersimpan: pembaruan penyimpanan urutan belum tersedia di server. Isian tetap ada; data profil tidak diubah.');
       if (numberingRevision !== null) {
-        const { error } = await supabase.rpc(dataset ? 'qom_nasab_save_dataset_profile' : 'qom_nasab_save_profile_order', {
+        const { visibility: _vis, ...rpcProfile } = dataToSubmit;
+        const { data: rpcRes, error } = await supabase.rpc(dataset ? 'qom_nasab_save_dataset_profile' : 'qom_nasab_save_profile_order', {
           ...(dataset ? { p_dataset: dataset.id } : {}),
-          p_id: editingId || null, p_profile: dataToSubmit, p_expected_revision: numberingRevision,
+          p_id: editingId || null, p_profile: rpcProfile, p_expected_revision: numberingRevision,
           p_orders: orderEntries.map(([parent_id, value]) => ({ parent_id, position: value === '' ? null : Number(value) }))
         });
         if (error) throw new Error(error.code === '40001' ? 'Silsilah berubah sejak formulir dibuka. Muat ulang sebelum menyimpan kembali.' : 'Profil dan urutan belum tersimpan. Periksa layanan penomoran server.');
+        const savedId = editingId || (rpcRes as any)?.id;
+        if (savedId) {
+          await supabase.from('individuals').update({ visibility: desiredVisibility }).eq('id', savedId);
+        }
       } else if (editingId) {
         const { error } = await supabase.from('individuals').update(dataToSubmit).eq('id', editingId);
         if (error) {
@@ -504,7 +529,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
   };
 
   const handleEditClick = (ind: Individual) => {
-    setFormData({ ...ind, separate_order: usesSeparateOrder(ind) });
+    setFormData({ ...ind, visibility: ind.visibility || 'public', separate_order: usesSeparateOrder(ind) });
     setEditingId(ind.id);
     setView('form');
   };
@@ -530,6 +555,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       profile_photo_url: '',
       father_id: isMale ? ind.id : '',
       mother_id: isMale ? '' : ind.id,
+      visibility: 'public',
     });
     setEditingId(null);
     setView('form');
@@ -555,19 +581,32 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
       profile_photo_url: '',
       father_id: '',
       mother_id: '',
+      visibility: 'public',
     });
     setEditingId(null);
     setView('form');
   };
 
   const handleDelete = async () => {
-    if (!editingId || !confirm('Yakin ingin hapus individu ini?')) return;
+    if (!editingId || !confirm('Yakin ingin menghapus (soft-delete) individu ini dari pohon publik?')) return;
     setLoading(true);
     try {
-      const { error } = await supabase.from('individuals').delete().eq('id', editingId);
+      // GAP-02: Soft-delete sesuai nasab-schema-v1.sql (UPDATE SET deleted_at = now(), tanpa hard DELETE)
+      const nowIso = new Date().toISOString();
+      await supabase
+        .from('marriages')
+        .update({ deleted_at: nowIso, is_active: false, visibility: 'private' })
+        .or(`husband_id.eq.${editingId},wife_id.eq.${editingId}`);
+      await supabase.from('individuals').update({ father_id: null }).eq('father_id', editingId);
+      await supabase.from('individuals').update({ mother_id: null }).eq('mother_id', editingId);
+      const { error } = await supabase
+        .from('individuals')
+        .update({ deleted_at: nowIso, visibility: 'private' })
+        .eq('id', editingId);
       if (error) throw error;
       onRefresh();
       fetchAllIndividuals();
+      fetchAllMarriages();
       setView('list');
       setEditingId(null);
     } catch (err: any) {
@@ -639,6 +678,16 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                         </span>
                         <span className="text-[9px] font-mono text-ink-light uppercase">
                           {ind.genData.baseId}
+                        </span>
+                        <span
+                          className={cn(
+                            'text-[9px] font-bold px-1.5 py-0.5 rounded uppercase',
+                            ind.visibility === 'private'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          )}
+                        >
+                          {ind.visibility === 'private' ? 'Privat' : 'Publik'}
                         </span>
                       </div>
                     </div>
@@ -780,6 +829,40 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                         Wafat
                       </button>
                       <button type="button" onClick={() => setFormData({ ...formData, is_alive: null, death_date: '' })} className="col-span-2 min-h-11 rounded-lg border border-border-olive text-xs font-bold">Belum diketahui</button>
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-ink-light mb-1.5 flex items-center justify-between">
+                      <span>Status Publikasi (Kontrak Privasi v1)</span>
+                      <span className={formData.visibility === 'private' ? 'text-rose-600 font-black' : 'text-emerald-600 font-black'}>
+                        {formData.visibility === 'private' ? 'PRIVAT (HANYA ADMIN)' : 'PUBLIK (SILSILAH & NARA)'}
+                      </span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, visibility: 'public' })}
+                        className={cn(
+                          'py-2.5 rounded-lg border text-xs font-bold transition-all',
+                          formData.visibility !== 'private'
+                            ? 'bg-primary-olive text-white border-primary-olive'
+                            : 'bg-white text-primary-olive border-border-olive'
+                        )}
+                      >
+                        Publik (Tampil di Silsilah)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, visibility: 'private' })}
+                        className={cn(
+                          'py-2.5 rounded-lg border text-xs font-bold transition-all',
+                          formData.visibility === 'private'
+                            ? 'bg-rose-600 text-white border-rose-700'
+                            : 'bg-white text-rose-600 border-border-olive'
+                        )}
+                      >
+                        Privat (Disembunyikan)
+                      </button>
                     </div>
                   </div>
                 </div>

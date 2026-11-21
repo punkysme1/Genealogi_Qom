@@ -2,8 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-// Opt in only after the server contract migration and API checks have passed.
-export const nasabReadMode = import.meta.env.VITE_NASAB_READ_MODE === 'contract' ? 'contract' : 'legacy';
+// SEC-06 (Wave 2): Default ke 'contract' (membaca view nasab_nawra_*_v1 / nasab_dataset_*_v1 yang menyensor PII).
+export const nasabReadMode = import.meta.env.VITE_NASAB_READ_MODE === 'legacy' ? 'legacy' : 'contract';
 
 export const isSupabaseConfigured = !!(
   supabaseUrl && 

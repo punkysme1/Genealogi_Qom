@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { readContractRows, readFamily, readProfileEvidence, publicSourceUrl } from '../src/lib/nasab-contract';
+import { readAdminDatasetRows } from '../src/lib/datasets';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function client(tables: Record<string, any[]>, error?: string) {
@@ -67,4 +69,21 @@ test('bad response shape fails instead of rendering an invented relationship', a
 test('internal archive hosts and active-content links never become public hyperlinks', () => {
   for (const url of ['javascript:alert(1)', 'http://qomaruddin-paperless:8000/documents/1', 'https://user:pass@arsip.naracode.id/', 'https://localhost/']) assert.equal(publicSourceUrl(url), undefined);
   assert.equal(publicSourceUrl('https://arsip.naracode.id/documents/1/details'), 'https://arsip.naracode.id/documents/1/details');
+});
+test('SEC-06 & GAP-02: readAdminDatasetRows excludes soft-deleted rows, default read mode is contract, and AdminPanel uses soft-delete + visibility', async () => {
+  const rows = [
+    { id: id(1), name: 'Active', gender: 'M', deleted_at: null, visibility: 'public' },
+    { id: id(2), name: 'SoftDeleted', gender: 'M', deleted_at: '2026-11-21T00:00:00Z', visibility: 'private' },
+  ];
+  const active = await readAdminDatasetRows(client({ individuals: rows }), 'individuals');
+  assert.equal(active.length, 1);
+  assert.equal(active[0].id, id(1));
+
+  const supabaseSrc = readFileSync('src/lib/supabase.ts', 'utf8');
+  assert.match(supabaseSrc, /VITE_NASAB_READ_MODE\s*===\s*'legacy'\s*\?\s*'legacy'\s*:\s*'contract'/);
+
+  const adminSrc = readFileSync('src/components/Admin/AdminPanel.tsx', 'utf8');
+  assert.equal(adminSrc.includes('.delete('), false, 'AdminPanel must use soft-delete UPDATE instead of hard DELETE');
+  assert.equal(adminSrc.includes('deleted_at'), true);
+  assert.equal(adminSrc.includes('visibility'), true);
 });

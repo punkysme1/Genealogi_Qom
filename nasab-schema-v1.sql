@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS public.individuals (
   updated_at timestamptz DEFAULT now()
 );
 ALTER TABLE public.individuals ADD COLUMN IF NOT EXISTS death_place text;
+ALTER TABLE public.individuals ADD COLUMN IF NOT EXISTS dataset_id integer NOT NULL DEFAULT 1;
+ALTER TABLE public.individuals ADD COLUMN IF NOT EXISTS aliases text[] NOT NULL DEFAULT '{}';
 ALTER TABLE public.individuals ALTER COLUMN is_alive SET DEFAULT NULL;
 -- Nilai true lama tidak diubah: perlu peninjauan, bukan asumsi migrasi.
 
@@ -95,6 +97,7 @@ CREATE TABLE IF NOT EXISTS public.marriages (
   is_active boolean DEFAULT true,
   created_at timestamptz DEFAULT now()
 );
+ALTER TABLE public.marriages ADD COLUMN IF NOT EXISTS dataset_id integer NOT NULL DEFAULT 1;
 -- Tidak diberi UNIQUE(husband_id,wife_id): pasangan dapat menikah ulang.
 -- is_active=false berarti perkawinan tidak aktif; alasan belum dimodelkan.
 
@@ -325,7 +328,7 @@ SELECT i.id,i.name,i.gender,i.birth_date,i.death_date,i.birth_place,i.death_plac
   NULL::text AS verification_source,
   CASE WHEN f.visibility='public' AND f.deleted_at IS NULL THEN f.id END AS father_id,
   CASE WHEN m.visibility='public' AND m.deleted_at IS NULL THEN m.id END AS mother_id,
-  i.revision,i.created_at,i.updated_at
+  i.revision,i.created_at,i.updated_at,i.dataset_id,i.aliases
 FROM public.individuals i
 LEFT JOIN public.individuals f ON f.id=i.father_id
 LEFT JOIN public.individuals m ON m.id=i.mother_id
@@ -337,7 +340,7 @@ WHERE i.visibility='public' AND i.deleted_at IS NULL;
 
 CREATE OR REPLACE VIEW public.nasab_nawra_marriages_v1
 WITH (security_barrier=true, security_invoker=false) AS
-SELECT m.id,m.husband_id,m.wife_id,m.marriage_date,m.is_active,m.revision,m.created_at,m.updated_at
+SELECT m.id,m.husband_id,m.wife_id,m.marriage_date,m.is_active,m.revision,m.created_at,m.updated_at,m.dataset_id
 FROM public.marriages m
 JOIN public.nasab_nawra_people_v1 h ON h.id=m.husband_id
 JOIN public.nasab_nawra_people_v1 w ON w.id=m.wife_id

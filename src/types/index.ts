@@ -28,6 +28,8 @@ export interface Individual {
   profile_photo_url?: string;
   father_id?: string;
   mother_id?: string;
+  visibility?: 'public' | 'private';
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +72,8 @@ export interface Marriage {
   wife_id: string;
   marriage_date?: string;
   is_active: boolean | null;
+  visibility?: 'public' | 'private';
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -79,6 +83,8 @@ export interface Source {
   title: string;
   url?: string;
   description?: string;
+  visibility?: 'public' | 'private';
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -89,4 +95,6 @@ export interface Event {
   date?: string;
   description: string;
   location?: string;
+  visibility?: 'public' | 'private';
+  deleted_at?: string | null;
 }

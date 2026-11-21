@@ -3,7 +3,7 @@ import type { ImportData } from './dataset-workbook';
 export interface Dataset { id: number; name: string; root_id: string | null; created_at?: string }
 export const INITIAL_DATASET: Dataset = { id: 1, name: 'Data awal', root_id: null };
 
-export async function readAdminDatasetRows<T extends { id: string }>(client: SupabaseClient, table: 'individuals' | 'marriages', dataset?: Dataset): Promise<T[]> {
+export async function readAdminDatasetRows<T extends { id: string; deleted_at?: string | null }>(client: SupabaseClient, table: 'individuals' | 'marriages', dataset?: Dataset): Promise<T[]> {
   const rows: T[] = [];
   let cursor = '';
   for (;;) {
@@ -13,7 +13,13 @@ export async function readAdminDatasetRows<T extends { id: string }>(client: Sup
     const result = await query;
     if (result.error || !Array.isArray(result.data)) throw new Error('Data admin gagal dimuat.');
     if (!result.data.length) return rows;
-    for (const row of result.data) { if (typeof row.id !== 'string' || row.id <= cursor) throw new Error('Urutan data admin tidak valid.'); cursor = row.id; rows.push(row as T); }
+    for (const row of result.data) {
+      if (typeof row.id !== 'string' || row.id <= cursor) throw new Error('Urutan data admin tidak valid.');
+      cursor = row.id;
+      if (row.deleted_at == null) {
+        rows.push(row as T);
+      }
+    }
   }
 }
 

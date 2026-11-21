@@ -67,6 +67,7 @@ export async function findSpouse(individualId: string, gender: 'M' | 'F', supaba
   if (!individualId) return null;
   const column = gender === 'M' ? 'husband_id' : 'wife_id';
   const targetColumn = gender === 'M' ? 'wife_id' : 'husband_id';
-  const { data } = await supabase.from('marriages').select(targetColumn).eq(column, individualId).eq('is_active', true).limit(2);
-  return data && data.length === 1 ? data[0][targetColumn] : null;
+  const { data } = await supabase.from('marriages').select(`${targetColumn},deleted_at`).eq(column, individualId).eq('is_active', true).limit(10);
+  const active = Array.isArray(data) ? data.filter((row: any) => row.deleted_at == null) : [];
+  return active.length === 1 ? active[0][targetColumn] : null;
 }
