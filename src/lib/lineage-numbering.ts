@@ -19,20 +19,46 @@ export function compareSiblingOrder(a: Individual, b: Individual): number {
 }
 
 export interface NumberedPath { ids: string[]; code: string | null; depth: number }
-export function lineagePaths(personId: string, people: Individual[], rootId?: string, limit = 5000) {
+export interface LineageContext {
+  root: Individual | undefined;
+  map: Map<string, Individual>;
+  positions: Map<string, number>;
+}
+
+const lineageContextCache = new WeakMap<Individual[], Map<string, LineageContext>>();
+
+export function createLineageContext(people: Individual[], rootId?: string): LineageContext {
+  const cacheKey = rootId ?? '';
+  let byRoot = lineageContextCache.get(people);
+  if (byRoot) {
+    const cached = byRoot.get(cacheKey);
+    if (cached) return cached;
+  }
+  let resolvedRootId = rootId;
   const configured = people.find(p => Object.prototype.hasOwnProperty.call(p, 'numbering_root_id'));
-  if (!rootId && configured) rootId = configured.numbering_root_id || '__unconfigured__';
+  if (!resolvedRootId && configured) resolvedRootId = configured.numbering_root_id || '__unconfigured__';
   const roots = people.filter(p => /^(kiai|kyai|kh\.?|k\.h\.)?\s*qomaruddin$/i.test(p.name.trim()));
-  const root = rootId ? people.find(p => p.id === rootId) : roots.length === 1 ? roots[0] : undefined;
-  const paths: NumberedPath[] = [];
-  const warnings = new Set<string>();
-  if (!root) return { paths, truncated: false, warnings: ['Tokoh pangkal Kiai Qomaruddin belum ditetapkan secara unik.'], rootId: undefined };
+  const root = resolvedRootId ? people.find(p => p.id === resolvedRootId) : roots.length === 1 ? roots[0] : undefined;
   const map = new Map(people.map(p => [p.id, p]));
   const positions = new Map<string, number>();
   for (const child of people) for (const parent of new Set([child.father_id, child.mother_id])) if (parent) {
     const position = childOrder(child, parent);
     if (position) { const key = `${parent}:${position}`; positions.set(key, (positions.get(key) || 0) + 1); }
   }
+  const ctx: LineageContext = { root, map, positions };
+  if (!byRoot) {
+    byRoot = new Map<string, LineageContext>();
+    lineageContextCache.set(people, byRoot);
+  }
+  byRoot.set(cacheKey, ctx);
+  return ctx;
+}
+
+export function lineagePaths(personId: string, people: Individual[], rootId?: string, limit = 5000, context?: LineageContext) {
+  const { root, map, positions } = context || createLineageContext(people, rootId);
+  const paths: NumberedPath[] = [];
+  const warnings = new Set<string>();
+  if (!root) return { paths, truncated: false, warnings: ['Tokoh pangkal Kiai Qomaruddin belum ditetapkan secara unik.'], rootId: undefined };
   let visits = 0, truncated = false;
   const walk = (id: string, ids: string[], segments: string[], complete: boolean) => {
     if (++visits > limit) { truncated = true; return; }

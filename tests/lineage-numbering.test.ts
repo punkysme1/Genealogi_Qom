@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Individual } from '../src/types';
-import { branchSymbol, lineagePaths, previewChildInsertion, numberingSnapshot, compareSiblingOrder } from '../src/lib/lineage-numbering';
-import { generateGenealogyIDs } from '../src/lib/genealogy';
+import { branchSymbol, createLineageContext, lineagePaths, previewChildInsertion, numberingSnapshot, compareSiblingOrder } from '../src/lib/lineage-numbering';
+import { calculateGenerations, generateGenealogyIDs } from '../src/lib/genealogy';
 const p = (id: string, parent?: string, order?: number): Individual => ({ id, name: id === 'root' ? 'Kiai Qomaruddin' : id, gender: null, father_id: parent,
   child_order: parent && order ? { [parent]: { position: order, source: 'Kitab fixture', locator: 'hlm. 3' } } : {}, is_verified: false, created_at: '', updated_at: '' });
 
@@ -90,4 +90,32 @@ test('descendant spouse retains their own code and incomplete spouse codes are n
   const incomplete = [people[0], p('b', 'root'), people[3]];
   const result = generateGenealogyIDs(people[3], incomplete, [{ ...marriage, husband_id: 'outside' }]);
   assert.ok(!result.alphaPaths.some(code => code.startsWith('+')));
+});
+
+test('PRF-02: calculateGenerations and generateGenealogyIDs reuse pre-built LineageContext and cache in O(N)', () => {
+  const rosiyah = { ...p('rosiyah', 'branch', 4), name: 'Rosiyah' };
+  const abu = { ...p('abu'), name: 'KH. Abu Ishaq' };
+  const people = [p('root'), p('branch', 'root', 8), rosiyah, abu];
+  const marriages = [{ id: 'm', husband_id: 'abu', wife_id: 'rosiyah', is_active: true, created_at: '' }];
+  const ctx = createLineageContext(people);
+  assert.equal(ctx.root?.id, 'root');
+  assert.equal(ctx.map.size, 4);
+
+  const { levels, ranks, shortestPaths } = calculateGenerations(people, marriages);
+  assert.equal(levels.root, 0);
+  assert.equal(levels.branch, 1);
+  assert.equal(levels.rosiyah, 2);
+  assert.equal(levels.abu, 2);
+  assert.equal(shortestPaths.rosiyah, '84');
+  assert.equal(shortestPaths.abu, '+84');
+
+  const cachedRosiyah = generateGenealogyIDs(rosiyah, people, marriages, levels, ranks, shortestPaths, true);
+  assert.equal(cachedRosiyah.displayId, '84');
+  assert.equal(cachedRosiyah.baseId, 'G2');
+  assert.equal(cachedRosiyah.level, 2);
+
+  const cachedAbu = generateGenealogyIDs(abu, people, marriages, levels, ranks, shortestPaths, true);
+  assert.equal(cachedAbu.displayId, '+84');
+  assert.equal(cachedAbu.baseId, '—');
+  assert.equal(cachedAbu.level, undefined);
 });
