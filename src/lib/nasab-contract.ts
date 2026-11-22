@@ -97,3 +97,19 @@ export function publicSourceUrl(raw?: string): string | undefined {
   } catch { /* Invalid URLs remain readable as source descriptions, never executable links. */ }
   return undefined;
 }
+
+/**
+ * SEC-09: Validasi tautan eksternal agar hanya skema http/https yang diizinkan
+ * pada href (menolak javascript:, data:, vbscript:, maupun URL berkredensial).
+ */
+export function safeLink(raw?: string | null): string | undefined {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return undefined;
+  try {
+    const url = new URL(trimmed);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return undefined;
+    return url.href;
+  } catch {
+    return undefined;
+  }
+}

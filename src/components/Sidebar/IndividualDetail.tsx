@@ -4,6 +4,7 @@ import { Individual, Marriage, Event } from '@/types';
 import { getJavaneseDescendantTerm } from '@/lib/relationships';
 import { generateGenealogyIDs } from '@/lib/genealogy';
 import { cn } from '@/lib/utils';
+import { safeLink } from '@/lib/nasab-contract';
 import { ProfileEvidence } from './ProfileEvidence';
 import { 
   Calendar, 
@@ -258,16 +259,28 @@ export default function IndividualDetail({
                   <span className="text-[9px] text-ink-light font-bold flex items-center gap-1">
                     <FileText size={10} /> {individual.verification_type || 'Manuskrip'}
                   </span>
-                  {isAdmin && individual.verification_source && (
-                    <a 
-                      href={individual.verification_source} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-[8px] text-primary-olive font-bold underline decoration-primary-olive/30 truncate max-w-full px-2 mt-0.5 hover:text-ink transition-colors flex items-center gap-1"
-                    >
-                      <Link2 size={8} /> Klik Lihat Data
-                    </a>
-                  )}
+                  {isAdmin && individual.verification_source && (() => {
+                    const safeHref = safeLink(individual.verification_source);
+                    if (safeHref) {
+                      return (
+                        <a 
+                          href={safeHref} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[8px] text-primary-olive font-bold underline decoration-primary-olive/30 truncate max-w-full px-2 mt-0.5 hover:text-ink transition-colors flex items-center gap-1"
+                        >
+                          <Link2 size={8} /> Klik Lihat Data
+                        </a>
+                      );
+                    }
+                    const trimmed = individual.verification_source.trim();
+                    if (/^(javascript|data|vbscript):/i.test(trimmed)) return null;
+                    return (
+                      <span className="text-[8px] text-ink-light font-medium truncate max-w-full px-2 mt-0.5">
+                        {trimmed}
+                      </span>
+                    );
+                  })()}
                   {individual.verified_by && (
                     <div className="mt-1 pt-1 border-t border-verified-green/10 w-full text-[8px] text-verified-green font-bold text-center">
                       Paraf: {individual.verified_by}
