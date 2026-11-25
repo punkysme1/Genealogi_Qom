@@ -24,7 +24,7 @@ function client(tables: Record<string, any[]>, error?: string) {
 }
 test('server page cap does not silently truncate family records', async () => {
   const rows = Array.from({ length: 7 }, (_, n) => ({ id: id(n + 1), name: `P${n}`, gender: 'M' }));
-  assert.equal((await readContractRows(client({ nasab_nawra_people_v1: rows }), 'people')).length, 7);
+  assert.equal((await readContractRows(client({ nasab_nara_people_v1: rows }), 'people')).length, 7);
 });
 test('legacy mode reads existing tables without requiring new contract views', async () => {
   const data = await readFamily(client({ individuals: [{ id: id(1), name: 'A', gender: 'M' }], marriages: [] }), undefined, 'legacy');
@@ -53,22 +53,31 @@ test('missing contract and permission failure remain distinct, without raw error
 });
 test('empty sources succeed while dangling family references fail', async () => {
   assert.deepEqual(await readFamily(client({})), { people: [], marriages: [], adoptions: [] });
-  await assert.rejects(readFamily(client({ nasab_nawra_people_v1: [{ id: id(1), name: 'A', gender: 'M', father_id: id(2) }] })), /INCONSISTENT_SNAPSHOT/);
+  await assert.rejects(readFamily(client({ nasab_nara_people_v1: [{ id: id(1), name: 'A', gender: 'M', father_id: id(2) }] })), /INCONSISTENT_SNAPSHOT/);
 });
-test('profile evidence includes marriage evidence and excludes unrelated events', async () => {
+test('profile evidence includes marriage evidence, historical event dates, and excludes unrelated events', async () => {
   const result = await readProfileEvidence(client({
-    nasab_nawra_events_v1: [{ id: id(1), individual_id: id(10), type: 'other', description: 'A' }, { id: id(2), individual_id: id(11), type: 'other', description: 'B' }],
-    nasab_nawra_sources_v1: [{ id: id(3), title: 'Source' }],
-    nasab_nawra_evidence_v1: [{ id: id(4), marriage_id: id(20), source_id: id(3), predicate: 'marriage', review_status: 'disputed' }],
+    nasab_nara_events_v1: [
+      { id: id(1), individual_id: id(10), type: 'other', description: 'A', time_original: '1190 H', calendar: 'hijri', earliest_year: 1776, latest_year: 1777, date_precision: 'year' },
+      { id: id(2), individual_id: id(11), type: 'other', description: 'B' },
+    ],
+    nasab_nara_sources_v1: [{ id: id(3), title: 'Source' }],
+    nasab_nara_evidence_v1: [{ id: id(4), marriage_id: id(20), source_id: id(3), predicate: 'marriage', review_status: 'disputed' }],
   }), id(10), [id(20)]);
-  assert.equal(result.events.length, 1); assert.equal(result.evidence[0].review_status, 'disputed'); assert.equal(result.sources.length, 1);
+  assert.equal(result.events.length, 1);
+  assert.equal(result.events[0].time_original, '1190 H');
+  assert.equal(result.events[0].earliest_year, 1776);
+  assert.equal(result.evidence[0].review_status, 'disputed');
+  assert.equal(result.sources.length, 1);
 });
 test('bad response shape fails instead of rendering an invented relationship', async () => {
-  await assert.rejects(readContractRows(client({ nasab_nawra_people_v1: [{ id: id(1), name: 'A', gender: 'unknown' }] }), 'people'), /INVALID_PROFILE/);
+  await assert.rejects(readContractRows(client({ nasab_nara_people_v1: [{ id: id(1), name: 'A', gender: 'unknown' }] }), 'people'), /INVALID_PROFILE/);
 });
-test('internal archive hosts and active-content links never become public hyperlinks', () => {
+test('internal archive hosts and active-content links never become public hyperlinks while *.qomaruddin.com and *.naracode.id are allowed', () => {
   for (const url of ['javascript:alert(1)', 'http://qomaruddin-paperless:8000/documents/1', 'https://user:pass@arsip.naracode.id/', 'https://localhost/']) assert.equal(publicSourceUrl(url), undefined);
   assert.equal(publicSourceUrl('https://arsip.naracode.id/documents/1/details'), 'https://arsip.naracode.id/documents/1/details');
+  assert.equal(publicSourceUrl('https://turots.qomaruddin.com/katalog/TQ0022'), 'https://turots.qomaruddin.com/katalog/TQ0022');
+  assert.equal(publicSourceUrl('https://nasab.qomaruddin.com/tokoh'), 'https://nasab.qomaruddin.com/tokoh');
 });
 test('SEC-06 & GAP-02: readAdminDatasetRows excludes soft-deleted rows, default read mode is contract, and AdminPanel uses soft-delete + visibility', async () => {
   const rows = [

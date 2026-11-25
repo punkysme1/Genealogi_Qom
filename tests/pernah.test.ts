@@ -64,9 +64,8 @@ test('Ponakan and nearest Minglimo remain; extending Mingnem stays in details', 
   assert.match(nephew.descriptions[0], /Ahmad Maghfur adalah Ponakan \/ Keponakan Gus Oni/);
   assert.match(nephew.descriptions[1], /Gus Oni adalah Paklik Ahmad Maghfur/);
   assert.equal(nephew.routes.length, 2); // one proven sibling path through each parent
-  assert.ok(nephew.routes[0].narrative.some(line => line.includes('Ahmad Maghfur bin Lilik Mughiroh')));
+  assert.ok(nephew.routes[0].narrative.some(line => line.includes('Ahmad Maghfur — anak dari ibu: Lilik Mughiroh')));
   assert.ok(nephew.routes[0].narrative.includes('Durratun Nasihah adalah istri dari Gus Oni.'));
-  assert.ok(nephew.routes[0].narrative.every(line => !line.includes('anak dari')));
   assert.equal(fifth.ancestorId, 'ishaq'); assert.deepEqual(fifth.depths, [5, 5]);
   assert.equal(sixth.ancestorId, 'harun'); assert.deepEqual(sixth.depths, [6, 6]);
   assert.equal(fifth.routes[0].branches?.from.steps.length, 5);
@@ -110,10 +109,10 @@ test('cycle detection still stops the multi-relationship result', () => {
   const result = calculatePernah('gus', 'ahmad', cyclic, marriages);
   assert.equal(result.cards.length, 0); assert.match(result.message!, /siklus/);
 });
-test('path narrative uses bin/binti based on the child gender', () => {
+test('path narrative uses bin/binti on paternal links and anak dari ibu on maternal links', () => {
   const result = calculatePernah('ahmad', 'gus', people, marriages);
   const path = result.cards[0].routes[0].path!;
-  assert.match(describeKinshipPath(path, people)[0], /^Ahmad Maghfur bin Lilik Mughiroh binti /);
+  assert.match(describeKinshipPath(path, people)[0], /^Ahmad Maghfur — anak dari ibu: Lilik Mughiroh /);
 });
 
 function branches(leftDepth: number, rightDepth: number) {
@@ -212,17 +211,21 @@ test('groups are ranked by shortest route rather than relationship category', ()
 
 
 test('unknown gender is explicit and existing matching patronymic is not duplicated', () => {
-  const persons = [p('c', 'Nafisah binti Syahronah'), p('m', 'Syahronah'), p('g', 'Asma')].map((person, i) => ({ ...person, gender: i === 0 ? 'F' as const : null }));
+  const persons = [
+    { ...p('c', 'Nafisah binti Syahronah', 'm'), gender: 'F' as const },
+    { ...p('m', 'Syahronah', 'g'), gender: null },
+    { ...p('g', 'Asma'), gender: null },
+  ];
   const path = { ids: ['c', 'm', 'g'], steps: [
-    { from: 'c', to: 'm', kind: 'parent' as const, recordId: 'c', field: 'mother_id' },
-    { from: 'm', to: 'g', kind: 'parent' as const, recordId: 'm', field: 'mother_id' }
+    { from: 'c', to: 'm', kind: 'parent' as const, recordId: 'c', field: 'father_id' },
+    { from: 'm', to: 'g', kind: 'parent' as const, recordId: 'm', field: 'father_id' }
   ] };
-  assert.deepEqual(describeKinshipPath(path, persons), ['Nafisah binti Syahronah [bin/binti belum diketahui] Asma']);
+  assert.deepEqual(describeKinshipPath(path, persons), ['Nafisah binti Syahronah — anak dari ayah: Asma']);
 });
 
 
 test('patronymic stored in a name stays quoted when it is not the linked parent name', () => {
-  const records = [ { ...p('child', 'Umamah bin Sholeh Tsani'), gender: 'F' as const }, p('parent', 'KH. Nawawi (KH. Sholeh Tsani)') ];
+  const records = [ { ...p('child', 'Umamah bin Sholeh Tsani', 'parent'), gender: 'F' as const }, p('parent', 'KH. Nawawi (KH. Sholeh Tsani)') ];
   const path = { ids: ['child', 'parent'], steps: [{ from: 'child', to: 'parent', kind: 'parent' as const, recordId: 'child', field: 'father_id' }] };
   assert.deepEqual(describeKinshipPath(path, records), ['“Umamah bin Sholeh Tsani” binti KH. Nawawi (KH. Sholeh Tsani)']);
 });

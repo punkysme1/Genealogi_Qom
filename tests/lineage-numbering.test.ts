@@ -20,7 +20,7 @@ test('shortest path means links, not code character length; names and codes alig
   const x = { ...p('x', 'a', 1), mother_id: 'c', child_order: { a: { position: 1, source: 'K', locator: '1' }, c: { position: 1, source: 'K', locator: '2' } } };
   const ids = generateGenealogyIDs(x, [p('root'), a, b, c, x], []);
   assert.equal(ids.displayId, '(36)1'); assert.deepEqual(ids.alphaPaths, ['(36)1', '111']);
-  assert.equal(ids.pathIds[0], 'x [bin/binti belum diketahui] a [bin/binti belum diketahui] Kiai Qomaruddin');
+  assert.equal(ids.pathIds[0], 'x — anak dari ayah: a — anak dari ayah: Kiai Qomaruddin');
 });
 test('same-size correction invalidates numbering immediately', () => {
   const people = [p('root'), p('a', 'root', 1)];

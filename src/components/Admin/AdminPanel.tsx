@@ -889,7 +889,7 @@ export default function AdminPanel({ onClose, selectedIndividual: initialSelecte
                       onChange={e => setFormData({...formData, aliases: e.target.value.split(';')})}
                       aria-describedby="public-alias-help" maxLength={2000}
                       className="w-full px-4 py-2.5 bg-surface border border-border-olive rounded-lg text-sm" />
-                    <p id="public-alias-help" className="text-xs text-ink-light mt-1">Pisahkan dengan titik koma. Nama ini boleh dibaca pengunjung dan dipakai Nawra untuk mencari tokoh yang sama.</p>
+                    <p id="public-alias-help" className="text-xs text-ink-light mt-1">Pisahkan dengan titik koma. Nama ini boleh dibaca pengunjung dan dipakai NARA untuk mencari tokoh yang sama.</p>
                   </div>}
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-ink-light mb-1.5 flex justify-between items-center">

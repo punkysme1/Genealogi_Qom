@@ -93,6 +93,11 @@ export interface Event {
   individual_id: string;
   type: 'birth' | 'death' | 'marriage' | 'education' | 'other';
   date?: string;
+  time_original?: string | null;
+  calendar?: string | null;
+  earliest_year?: number | null;
+  latest_year?: number | null;
+  date_precision?: string | null;
   description: string;
   location?: string;
   visibility?: 'public' | 'private';

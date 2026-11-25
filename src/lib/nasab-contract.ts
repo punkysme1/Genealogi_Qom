@@ -14,9 +14,9 @@ export class NasabReadError extends Error {
   }
 }
 const resources = {
-  people: 'nasab_nawra_people_v1', marriages: 'nasab_nawra_marriages_v1',
-  events: 'nasab_nawra_events_v1', sources: 'nasab_nawra_sources_v1', evidence: 'nasab_nawra_evidence_v1',
-  adoptions: 'nasab_nawra_adoptions_v1',
+  people: 'nasab_nara_people_v1', marriages: 'nasab_nara_marriages_v1',
+  events: 'nasab_nara_events_v1', sources: 'nasab_nara_sources_v1', evidence: 'nasab_nara_evidence_v1',
+  adoptions: 'nasab_nara_adoptions_v1',
 } as const;
 type Resource = keyof typeof resources;
 export type NasabReadMode = 'legacy' | 'contract';
@@ -53,8 +53,11 @@ export async function readContractRows<T>(client: SupabaseClient, resource: Reso
       if (resource === 'sources' && typeof row.title !== 'string') throw new NasabReadError('INVALID_SOURCE', resource);
       if (resource === 'evidence' && (typeof row.source_id !== 'string' || typeof row.predicate !== 'string' || !['draft', 'reviewed', 'disputed'].includes(row.review_status as string))) throw new NasabReadError('INVALID_EVIDENCE', resource);
       if (resource === 'evidence' && Number(!!row.individual_id) + Number(!!row.marriage_id) !== 1) throw new NasabReadError('INVALID_EVIDENCE_TARGET', resource);
-      for (const field of ['birth_date', 'death_date', 'date', 'description', 'title', 'url', 'locator', 'quotation', 'asserted_value']) {
+      for (const field of ['birth_date', 'death_date', 'date', 'time_original', 'calendar', 'date_precision', 'description', 'title', 'url', 'locator', 'quotation', 'asserted_value']) {
         if (row[field] != null && typeof row[field] !== 'string') throw new NasabReadError('INVALID_FIELD', resource);
+      }
+      for (const field of ['earliest_year', 'latest_year']) {
+        if (row[field] != null && (typeof row[field] !== 'number' || !Number.isFinite(row[field] as number))) throw new NasabReadError('INVALID_FIELD', resource);
       }
       if (resource === 'adoptions' && (typeof row.parent_id !== 'string' || typeof row.child_id !== 'string' || row.parent_id === row.child_id)) throw new NasabReadError('INVALID_ADOPTION', resource);
       cursor = row.id;
@@ -85,7 +88,15 @@ export async function readProfileEvidence(client: SupabaseClient, personId: stri
   const relevant = evidence.filter(e => e.individual_id === personId || (!!e.marriage_id && marriageIds.includes(e.marriage_id)));
   const used = new Set(relevant.map(e => e.source_id));
   if (relevant.some(e => !sources.some(s => s.id === e.source_id))) throw new NasabReadError('INCONSISTENT_SNAPSHOT', 'evidence');
-  return { events: events.sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id.localeCompare(b.id)), sources: sources.filter(s => s.individual_id === personId || used.has(s.id)), evidence: relevant };
+  return {
+    events: events.sort((a, b) => {
+      const ka = a.date || (a.earliest_year != null ? String(a.earliest_year).padStart(4, '0') : '');
+      const kb = b.date || (b.earliest_year != null ? String(b.earliest_year).padStart(4, '0') : '');
+      return ka.localeCompare(kb) || a.id.localeCompare(b.id);
+    }),
+    sources: sources.filter(s => s.individual_id === personId || used.has(s.id)),
+    evidence: relevant,
+  };
 }
 
 export function publicSourceUrl(raw?: string): string | undefined {
@@ -93,7 +104,16 @@ export function publicSourceUrl(raw?: string): string | undefined {
   try {
     const url = new URL(raw);
     if (url.protocol !== 'https:' || url.username || url.password) return undefined;
-    if (['arsip.naracode.id', 'turots.naracode.id', 'nasab.naracode.id', 'sanad.naracode.id'].includes(url.hostname)) return url.href;
+    const host = url.hostname.toLowerCase();
+    if (!host || host.startsWith('.') || host.includes('..')) return undefined;
+    if (
+      host === 'qomaruddin.com' ||
+      host.endsWith('.qomaruddin.com') ||
+      host === 'naracode.id' ||
+      host.endsWith('.naracode.id')
+    ) {
+      return url.href;
+    }
   } catch { /* Invalid URLs remain readable as source descriptions, never executable links. */ }
   return undefined;
 }

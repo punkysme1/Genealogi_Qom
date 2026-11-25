@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-// SEC-06 (Wave 2): Default ke 'contract' (membaca view nasab_nawra_*_v1 / nasab_dataset_*_v1 yang menyensor PII).
+// SEC-06 (Wave 2/3): Default ke 'contract' (membaca view nasab_nara_*_v1 / nasab_dataset_*_v1 yang menyensor PII).
 export const nasabReadMode = import.meta.env.VITE_NASAB_READ_MODE === 'legacy' ? 'legacy' : 'contract';
 
 export const isSupabaseConfigured = !!(
